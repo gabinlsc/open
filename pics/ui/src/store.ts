@@ -5,6 +5,7 @@ export type Dialog =
   | { kind: "new" }
   | { kind: "export" }
   | { kind: "transform" }
+  | { kind: "selectOp"; op: "feather" | "grow" | "shrink" }
   | { kind: "shortcuts" }
   | { kind: "confirmClose"; id: number; name: string }
   | null;

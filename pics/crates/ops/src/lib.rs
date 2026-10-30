@@ -2,6 +2,7 @@
 //! `TileGrid` qui partage ses tuiles inchangées avec l'ancienne ; l'appelant en déduit la
 //! commande d'historique (`ReplaceTiles::between`).
 
+pub mod selection;
 pub mod transform;
 
 use std::sync::Arc;
@@ -47,7 +48,11 @@ pub fn apply_to_layer(doc: &mut Document, layer: LayerId, op: Op) -> Result<bool
         return Err(CoreError::LayerLocked(target.name.clone()));
     }
     let old = &target.pixels;
-    let new = op.run(old)?;
+    let mut new = op.run(old)?;
+    // Avec une sélection active, l'opération n'agit qu'à travers elle (bords adoucis compris).
+    if let Some(selection) = &doc.selection {
+        new = selection::through_selection(old, &new, selection)?;
+    }
     let Some(cmd) = ReplaceTiles::between(op.label(), layer, old, &new) else {
         return Ok(false);
     };
@@ -267,5 +272,22 @@ mod tests {
         // Verrouiller les pixels n'interdit pas de déplacer ; l'inverse non plus.
         doc.layers[0].locks = openpics_core::Locks { pixels: true, ..Default::default() };
         assert!(apply_transform(&mut doc, layer, &Matrix3::translate(1.0, 0.0)).is_ok());
+    }
+
+    #[test]
+    fn operations_only_touch_the_selection() {
+        let mut doc = Document::new(DocId(1), "t", Size::new(64, 64)).unwrap();
+        let layer = doc.layers[0].id;
+        for y in 0..64 {
+            for x in 0..64 {
+                doc.layers[0].pixels.put_pixel(x, y, [10, 10, 10, 255]);
+            }
+        }
+        doc.selection = Some(selection::rect(64, 64, (8.0, 8.0), (16.0, 16.0)).unwrap());
+        assert!(apply_to_layer(&mut doc, layer, Op::Invert).unwrap());
+        assert_eq!(doc.layers[0].pixels.get_pixel(10, 10), [245, 245, 245, 255]);
+        assert_eq!(doc.layers[0].pixels.get_pixel(40, 40), [10, 10, 10, 255]);
+        doc.undo().unwrap();
+        assert_eq!(doc.layers[0].pixels.get_pixel(10, 10), [10, 10, 10, 255]);
     }
 }

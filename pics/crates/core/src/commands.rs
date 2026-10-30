@@ -530,6 +530,36 @@ impl Command for SetLayerStyles {
     }
 }
 
+/// Remplace la sélection (ou la supprime avec `None`). Les grilles sont partagées par `Arc` de tuiles :
+/// garder l'ancienne et la nouvelle coûte presque rien.
+pub struct SetSelection {
+    name: String,
+    after: Option<TileGrid>,
+    before: Option<Option<TileGrid>>,
+}
+
+impl SetSelection {
+    pub fn new(name: impl Into<String>, selection: Option<TileGrid>) -> Self {
+        Self { name: name.into(), after: selection, before: None }
+    }
+}
+
+impl Command for SetSelection {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn apply(&mut self, doc: &mut Document) -> Result<(), CoreError> {
+        self.before = Some(std::mem::replace(&mut doc.selection, self.after.clone()));
+        Ok(())
+    }
+
+    fn revert(&mut self, doc: &mut Document) -> Result<(), CoreError> {
+        doc.selection = self.before.take().ok_or(CoreError::NoSelection)?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -781,5 +811,20 @@ mod tests {
         d.undo().unwrap();
         assert_eq!(d.layers.iter().map(|l| l.id).collect::<Vec<_>>(), order);
         assert_eq!(d.layer(top).unwrap().group, Some(g));
+    }
+
+    #[test]
+    fn selection_commands_roundtrip() {
+        let mut d = doc();
+        let mut m = TileGrid::new(600, 600).unwrap();
+        m.put_pixel(5, 5, [255; 4]);
+        d.execute(Box::new(SetSelection::new("Sélection", Some(m)))).unwrap();
+        assert_eq!(crate::selection::value(d.selection.as_ref().unwrap(), 5, 5), 255);
+        d.execute(Box::new(SetSelection::new("Désélectionner", None))).unwrap();
+        assert!(d.selection.is_none());
+        d.undo().unwrap();
+        assert!(d.selection.is_some());
+        d.undo().unwrap();
+        assert!(d.selection.is_none());
     }
 }

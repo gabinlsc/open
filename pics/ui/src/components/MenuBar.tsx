@@ -49,6 +49,18 @@ export function MenuBar() {
         { action: "layer.mask_hide" },
       ],
     },
+    {
+      label: "Sélection",
+      items: [
+        { action: "select.all" },
+        { action: "select.none" },
+        { action: "select.invert" },
+        { sep: true },
+        { action: "select.feather" },
+        { action: "select.grow" },
+        { action: "select.shrink" },
+      ],
+    },
     { label: "Image", items: [{ action: "image.flip_h" }, { action: "image.flip_v" }, { action: "image.invert" }] },
     {
       label: "Affichage",

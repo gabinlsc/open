@@ -14,6 +14,8 @@ const MIN_CACHED_TILES: usize = 1024;
 /// Sous cette largeur en pixels d'écran, une ligne de grille n'est plus lisible : on l'omet.
 const MIN_GRID_PX: f64 = 6.0;
 const MAX_GRID_LINES: usize = 4000;
+/// Au-delà, un contour de sélection n'est plus lisible et ne ferait que ralentir l'image.
+const MAX_OUTLINE_SEGMENTS: usize = 60_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Theme {
@@ -52,6 +54,8 @@ pub struct FrameParams<'a> {
     pub theme: Theme,
     /// Repère en cours de création (glissé depuis une règle), non encore dans le document.
     pub preview_guide: Option<(openpics_core::Axis, f64)>,
+    /// Sélection dont on dessine le contour (aperçu du geste en cours, sinon celle du document).
+    pub selection: Option<&'a openpics_core::TileGrid>,
 }
 
 /// Poignées natives de la fenêtre qui reçoit le canvas.
@@ -894,6 +898,26 @@ fn build_lines(frame: &FrameParams<'_>, size: (u32, u32)) -> Vec<LineVertex> {
         }
     }
 
+    if let Some(mask) = frame.selection {
+        let v = vp.visible_doc_rect(openpics_core::Size::new(size.0, size.1));
+        let rect = (
+            v.x.max(0) as u32,
+            v.y.max(0) as u32,
+            (i64::from(v.x) + i64::from(v.w)).clamp(0, i64::from(u32::MAX)) as u32,
+            (i64::from(v.y) + i64::from(v.h)).clamp(0, i64::from(u32::MAX)) as u32,
+        );
+        for e in openpics_core::selection::outline(mask, rect, MAX_OUTLINE_SEGMENTS) {
+            let (a, b) = (
+                vp.doc_to_screen(openpics_core::Vec2::new(f64::from(e[0]), f64::from(e[1]))),
+                vp.doc_to_screen(openpics_core::Vec2::new(f64::from(e[2]), f64::from(e[3]))),
+            );
+            // Alternance noir/blanc par blocs de 4 pixels de document : lisible sur tous les fonds.
+            let black = (e[0] as u32 / 4 + e[1] as u32 / 4) % 2 == 0;
+            let color = if black { [0.0, 0.0, 0.0, 1.0] } else { [1.0, 1.0, 1.0, 1.0] };
+            line([px(a.x), px(a.y)], [px(b.x), px(b.y)], color);
+        }
+    }
+
     if let Some((axis, pos)) = frame.preview_guide {
         let color = [0.0, 0.72, 0.85, 0.7];
         match axis {
@@ -963,10 +987,42 @@ mod tests {
             settings: ViewSettings { show_grid: false, show_guides: false, ..ViewSettings::default() },
             theme: Theme::Light,
             preview_guide: None,
+            selection: None,
         };
         let img = r.render_to_rgba8(&frame, (100, 100)).unwrap();
         let p = pixel(&img, 100, 20, 20);
         assert!(p[0] > 90 && p[0] < 165, "gris moyen attendu, obtenu {p:?}");
+    }
+
+    #[test]
+    fn selection_outline_is_drawn_on_the_boundary() {
+        let Some(mut r) = headless() else { return };
+        let doc = Document::new(DocId(1), "t", Size::new(64, 64)).unwrap();
+        let mut mask = openpics_core::TileGrid::new(64, 64).unwrap();
+        for y in 10..30 {
+            for x in 10..30 {
+                mask.put_pixel(x, y, [255; 4]);
+            }
+        }
+        let frame = FrameParams {
+            document: Some(&doc),
+            viewport: Viewport { zoom: 4.0, origin: Vec2::new(10.0, 10.0) },
+            settings: ViewSettings { show_grid: false, show_guides: false, ..ViewSettings::default() },
+            theme: Theme::Light,
+            preview_guide: None,
+            selection: Some(&mask),
+        };
+        let with = r.render_to_rgba8(&frame, (300, 300)).unwrap();
+        let without = r.render_to_rgba8(&FrameParams { selection: None, ..frame }, (300, 300)).unwrap();
+        // Arête gauche à x_doc = 10 → x_écran = 50 : les pixels qui changent sont tous noirs ou blancs.
+        let changed: Vec<_> = (50..130).filter(|&y| pixel(&with, 300, 50, y) != pixel(&without, 300, 50, y)).collect();
+        assert!(changed.len() > 30, "le contour doit couvrir l'arête : {} pixels", changed.len());
+        for y in changed {
+            let p = pixel(&with, 300, 50, y);
+            assert!(p[0] == p[1] && p[1] == p[2] && (p[0] == 0 || p[0] == 255), "{p:?}");
+        }
+        // Loin du contour, l'image est inchangée.
+        assert_eq!(pixel(&with, 300, 200, 200), pixel(&without, 300, 200, 200));
     }
 
     #[test]
@@ -992,6 +1048,7 @@ mod tests {
             settings: ViewSettings { show_grid: true, show_guides: false, grid_spacing: 1, ..ViewSettings::default() },
             theme: Theme::Light,
             preview_guide: None,
+            selection: None,
         };
         // 1 px de doc à 2 % = 0,02 px d'écran : seul le contour (4 segments) doit rester.
         assert_eq!(build_lines(&frame, (800, 600)).len(), 8);
@@ -1030,6 +1087,7 @@ mod tests {
             settings: ViewSettings { show_grid: false, show_guides: false, ..ViewSettings::default() },
             theme: Theme::Light,
             preview_guide: None,
+            selection: None,
         };
         let img = r.render_to_rgba8(&frame, (700, 700)).unwrap();
         // pixel doc (10,10) -> écran (20+20 .. 20+22, 30+20 .. 30+22)
@@ -1056,6 +1114,7 @@ mod tests {
                 settings: ViewSettings { show_grid: false, show_guides: false, ..ViewSettings::default() },
                 theme: Theme::Dark,
                 preview_guide: None,
+                selection: None,
             }
         }
         let a = r.render_to_rgba8(&frame(&doc), (300, 300)).unwrap();
@@ -1080,6 +1139,7 @@ mod tests {
             settings: ViewSettings { show_grid: false, show_guides: false, ..ViewSettings::default() },
             theme: Theme::Light,
             preview_guide: None,
+            selection: None,
         };
         let a = r.render_to_rgba8(&frame, (300, 300)).unwrap();
         assert_eq!(pixel(&a, 300, 10, 10), [31, 39, 184, 255], "produit attendu, pas le dernier calque tel quel");
@@ -1103,6 +1163,7 @@ mod tests {
             settings: ViewSettings::default(),
             theme: Theme::Light,
             preview_guide: None,
+            selection: None,
         };
         let img = r.render_to_rgba8(&frame, (200, 200)).unwrap();
         let p = pixel(&img, 200, 60, 150);

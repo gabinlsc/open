@@ -6,6 +6,7 @@ import type { HistoryDto } from "./HistoryDto";
 import type { LayerDto } from "./LayerDto";
 import type { SettingsDto } from "./SettingsDto";
 import type { Tool } from "./Tool";
+import type { ToolOptionsDto } from "./ToolOptionsDto";
 import type { ViewState } from "./ViewState";
 
 /**
@@ -16,4 +17,4 @@ export type Snapshot = { docs: Array<DocSummary>, activeId: number | null, view:
 /**
  * Calques du document actif, du plus haut au plus bas.
  */
-layers: Array<LayerDto>, activeLayerId: number | null, blendModes: Array<BlendInfo>, history: HistoryDto, canUndo: boolean, canRedo: boolean, settings: SettingsDto, tool: Tool, };
+layers: Array<LayerDto>, activeLayerId: number | null, blendModes: Array<BlendInfo>, hasSelection: boolean, toolOptions: ToolOptionsDto, history: HistoryDto, canUndo: boolean, canRedo: boolean, settings: SettingsDto, tool: Tool, };

@@ -8,7 +8,7 @@ function propsOf(l: LayerDto, patch: Partial<LayerPropsDto> = {}): LayerPropsDto
 }
 
 /** Curseur 0–100 % : n'envoie au cœur (donc à l'historique) qu'à la fin du geste, pas à chaque pas. */
-function Percent({ label, value, onCommit }: { label: string; value: number; onCommit: (v: number) => void }) {
+export function Percent({ label, value, onCommit }: { label: string; value: number; onCommit: (v: number) => void }) {
   const [local, setLocal] = useState(Math.round(value * 100));
   useEffect(() => setLocal(Math.round(value * 100)), [value]);
   const commit = () => local !== Math.round(value * 100) && onCommit(local / 100);

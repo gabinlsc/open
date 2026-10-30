@@ -92,12 +92,16 @@ impl Session {
             },
             Tool::MagicWand => self.wand(at, p.mode())?,
             Tool::Hand | Tool::Zoom => {}
+            _ => self.paint_down(p, at)?,
         }
         Ok(())
     }
 
     pub fn pointer_move(&mut self, p: &Pointer) -> Result<(), SessionError> {
         let at = self.doc_point(p);
+        if self.stroke.is_some() {
+            return self.paint_move(p, at);
+        }
         let Some(mut drag) = self.drag.take() else { return Ok(()) };
         if drag.tool == Tool::Lasso {
             // Un point par pixel d'écran suffit ; au-delà on alourdit le polygone sans rien gagner.
@@ -115,6 +119,9 @@ impl Session {
 
     pub fn pointer_up(&mut self, p: &Pointer) -> Result<(), SessionError> {
         let at = self.doc_point(p);
+        if self.stroke.is_some() {
+            return self.paint_up(p, at);
+        }
         let Some(drag) = self.drag.take() else { return Ok(()) };
         if drag.tool == Tool::PolygonLasso {
             // Le polygone se construit clic après clic ; il se ferme avec `tool_finish`.
@@ -151,6 +158,7 @@ impl Session {
 
     /// Échap : abandonne le geste en cours sans toucher à la sélection.
     pub fn tool_cancel(&mut self) {
+        self.paint_cancel();
         self.drag = None;
         self.selection_preview = None;
     }

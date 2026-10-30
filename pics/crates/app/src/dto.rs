@@ -45,6 +45,21 @@ pub enum Tool {
     Lasso,
     PolygonLasso,
     MagicWand,
+    Brush,
+    Pencil,
+    Eraser,
+    Bucket,
+    Gradient,
+    CloneStamp,
+    Heal,
+    SpotHeal,
+    Patch,
+    Blur,
+    Sharpen,
+    Smudge,
+    Dodge,
+    Burn,
+    Sponge,
 }
 
 /// Réglages des outils de sélection.
@@ -205,6 +220,7 @@ pub struct Snapshot {
     pub blend_modes: Vec<BlendInfo>,
     pub has_selection: bool,
     pub tool_options: ToolOptionsDto,
+    pub paint_options: PaintOptionsDto,
     pub history: HistoryDto,
     pub can_undo: bool,
     pub can_redo: bool,
@@ -542,4 +558,109 @@ pub struct TransformDto {
     pub rotation_deg: f64,
     pub translate_x: f64,
     pub translate_y: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum GradientKindDto {
+    Linear,
+    Radial,
+    Angular,
+    Reflected,
+    Diamond,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum TonalRangeDto {
+    Shadows,
+    Midtones,
+    Highlights,
+}
+
+/// Couleurs et réglages communs aux outils de peinture et de retouche.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct PaintOptionsDto {
+    pub foreground: String,
+    pub background: String,
+    pub size: f32,
+    pub hardness: f32,
+    pub spacing: f32,
+    pub opacity: f32,
+    pub flow: f32,
+    pub smoothing: f32,
+    pub size_from_pressure: bool,
+    pub opacity_from_pressure: bool,
+    pub gradient: GradientKindDto,
+    /// Dégradé du premier plan vers la transparence plutôt que vers l'arrière-plan.
+    pub gradient_to_transparent: bool,
+    pub tonal_range: TonalRangeDto,
+    /// Éponge : `true` = saturer, `false` = désaturer.
+    pub saturate: bool,
+}
+
+impl Default for PaintOptionsDto {
+    fn default() -> Self {
+        Self {
+            foreground: "#000000".into(),
+            background: "#ffffff".into(),
+            size: 20.0,
+            hardness: 0.8,
+            spacing: 0.15,
+            opacity: 1.0,
+            flow: 1.0,
+            smoothing: 0.0,
+            size_from_pressure: true,
+            opacity_from_pressure: false,
+            gradient: GradientKindDto::Linear,
+            gradient_to_transparent: false,
+            tonal_range: TonalRangeDto::Midtones,
+            saturate: true,
+        }
+    }
+}
+
+impl PaintOptionsDto {
+    /// Remplace les couleurs invalides par leur valeur actuelle et borne les réglages numériques.
+    pub fn sanitized(&self, current: &PaintOptionsDto) -> PaintOptionsDto {
+        let keep = |new: &str, old: &str| if parse_hex(new).is_some() { new.to_owned() } else { old.to_owned() };
+        let brush = self.brush([0; 3]).sanitized();
+        PaintOptionsDto {
+            foreground: keep(&self.foreground, &current.foreground),
+            background: keep(&self.background, &current.background),
+            size: brush.size,
+            hardness: brush.hardness,
+            spacing: brush.spacing,
+            opacity: brush.opacity,
+            flow: brush.flow,
+            smoothing: brush.smoothing,
+            ..self.clone()
+        }
+    }
+
+    pub fn brush(&self, color: [u8; 3]) -> openpics_ops::brush::BrushParams {
+        openpics_ops::brush::BrushParams {
+            size: self.size,
+            hardness: self.hardness,
+            spacing: self.spacing,
+            opacity: self.opacity,
+            flow: self.flow,
+            color,
+            smoothing: self.smoothing,
+            size_from_pressure: self.size_from_pressure,
+            opacity_from_pressure: self.opacity_from_pressure,
+        }
+    }
+
+    pub fn fg(&self) -> [u8; 3] {
+        parse_hex(&self.foreground).unwrap_or([0; 3])
+    }
+
+    pub fn bg(&self) -> [u8; 3] {
+        parse_hex(&self.background).unwrap_or([255; 3])
+    }
 }

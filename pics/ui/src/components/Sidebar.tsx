@@ -1,6 +1,7 @@
 import { api } from "../api";
 import { activeDoc, useStore } from "../store";
 import { LayerPanel } from "./LayerPanel";
+import { PaintOptions } from "./PaintOptions";
 import { ToolOptions } from "./ToolOptions";
 
 export function Sidebar() {
@@ -25,6 +26,7 @@ export function Sidebar() {
         )}
       </section>
       <ToolOptions />
+      <PaintOptions />
       <LayerPanel />
       <section aria-labelledby="p-hist">
         <h3 id="p-hist">Historique</h3>

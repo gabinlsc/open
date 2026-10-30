@@ -1,7 +1,7 @@
 import { api, type Tool } from "../api";
 import { prettyChord } from "../keys";
 import { useStore } from "../store";
-import { EllipseSelectIcon, HandIcon, LassoIcon, PolygonLassoIcon, RectSelectIcon, WandIcon, ZoomIcon } from "./Icons";
+import { Glyph, EllipseSelectIcon, HandIcon, LassoIcon, PolygonLassoIcon, RectSelectIcon, WandIcon, ZoomIcon } from "./Icons";
 
 const TOOLS: { id: Tool; label: string; action: string; icon: JSX.Element }[] = [
   { id: "hand", label: "Main", action: "tool.hand", icon: <HandIcon /> },
@@ -11,6 +11,21 @@ const TOOLS: { id: Tool; label: string; action: string; icon: JSX.Element }[] = 
   { id: "lasso", label: "Lasso", action: "tool.lasso", icon: <LassoIcon /> },
   { id: "polygon_lasso", label: "Lasso polygonal", action: "tool.polygon_lasso", icon: <PolygonLassoIcon /> },
   { id: "magic_wand", label: "Baguette magique", action: "tool.wand", icon: <WandIcon /> },
+  { id: "brush", label: "Pinceau", action: "tool.brush", icon: <Glyph>✎</Glyph> },
+  { id: "pencil", label: "Crayon", action: "tool.pencil", icon: <Glyph>✏</Glyph> },
+  { id: "eraser", label: "Gomme", action: "tool.eraser", icon: <Glyph>⌫</Glyph> },
+  { id: "bucket", label: "Pot de peinture", action: "tool.bucket", icon: <Glyph>⬣</Glyph> },
+  { id: "gradient", label: "Dégradé", action: "tool.gradient", icon: <Glyph>◧</Glyph> },
+  { id: "clone_stamp", label: "Tampon de duplication", action: "tool.clone", icon: <Glyph>◎</Glyph> },
+  { id: "heal", label: "Correcteur", action: "tool.heal", icon: <Glyph>✚</Glyph> },
+  { id: "spot_heal", label: "Correcteur localisé", action: "tool.spot_heal", icon: <Glyph>✦</Glyph> },
+  { id: "patch", label: "Pièce", action: "tool.patch", icon: <Glyph>▤</Glyph> },
+  { id: "blur", label: "Goutte d'eau (flou)", action: "tool.blur", icon: <Glyph>◌</Glyph> },
+  { id: "sharpen", label: "Netteté", action: "tool.sharpen", icon: <Glyph>◆</Glyph> },
+  { id: "smudge", label: "Doigt", action: "tool.smudge", icon: <Glyph>☞</Glyph> },
+  { id: "dodge", label: "Densité −", action: "tool.dodge", icon: <Glyph>◐</Glyph> },
+  { id: "burn", label: "Densité +", action: "tool.burn", icon: <Glyph>◑</Glyph> },
+  { id: "sponge", label: "Éponge", action: "tool.sponge", icon: <Glyph>▒</Glyph> },
 ];
 
 export function Toolbar() {

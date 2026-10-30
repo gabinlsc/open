@@ -23,12 +23,13 @@ import type { StyleDto } from "./gen/StyleDto";
 import type { Snapshot } from "./gen/Snapshot";
 import type { ThemeChoice } from "./gen/ThemeChoice";
 import type { TransformDto } from "./gen/TransformDto";
+import type { ModelDto } from "./gen/ModelDto";
 import type { ShapeDto } from "./gen/ShapeDto";
 import type { TextDto } from "./gen/TextDto";
 import type { Tool } from "./gen/Tool";
 import type { ToolOptionsDto } from "./gen/ToolOptionsDto";
 
-export type { ShapeDto, TextDto, FilterInfoDto, AdjustmentDto, AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, PaintOptionsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
+export type { ModelDto, ShapeDto, TextDto, FilterInfoDto, AdjustmentDto, AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, PaintOptionsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
 
 /** Erreur typée côté TS : `code` est stable, `message` est affichable tel quel. */
 export class CommandError extends Error {
@@ -102,6 +103,12 @@ export const api = {
   shapeExportSvg: (id: number, path: string) => call<void>("shape_export_svg", { id, path }),
   layerRasterize: (id: number) => call<Snapshot>("layer_rasterize", { id }),
   svgImport: (path: string) => call<Snapshot>("svg_import", { path }),
+  aiSelectSubject: (tolerance: number) => call<Snapshot>("ai_select_subject", { tolerance }),
+  aiRemoveBackground: (tolerance: number) => call<Snapshot>("ai_remove_background", { tolerance }),
+  aiInpaint: () => call<Snapshot>("ai_inpaint"),
+  aiModels: () => call<ModelDto[]>("ai_models"),
+  aiModelImport: (id: string, path: string) => call<ModelDto[]>("ai_model_import", { id, path }),
+  aiModelRemove: (id: string) => call<ModelDto[]>("ai_model_remove", { id }),
   maskAdd: (id: number, reveal: boolean) => call<Snapshot>("mask_add", { id, reveal }),
   maskRemove: (id: number) => call<Snapshot>("mask_remove", { id }),
   maskSetEnabled: (id: number, enabled: boolean) => call<Snapshot>("mask_set_enabled", { id, enabled }),

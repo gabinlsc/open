@@ -17,6 +17,7 @@ use crate::session::Session;
 pub struct AppShared {
     pub session: Mutex<Session>,
     prefs_path: PathBuf,
+    models_dir: PathBuf,
     portable: bool,
     app: AppHandle,
     canvas: Mutex<Option<native::Canvas>>,
@@ -117,11 +118,14 @@ pub fn run() {
             let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(PathBuf::from));
             let default_dir = app.path().app_config_dir().unwrap_or_else(|_| PathBuf::from("."));
             let portable = exe_dir.as_deref().is_some_and(|d| d.join("portable").exists());
-            let prefs_path = config_dir(exe_dir.as_deref(), default_dir).join("prefs.json");
+            let base_dir = config_dir(exe_dir.as_deref(), default_dir);
+            let prefs_path = base_dir.join("prefs.json");
+            let models_dir = base_dir.join("models");
             let prefs = Prefs::load(&prefs_path);
             let shared: Shared = Arc::new(AppShared {
                 session: Mutex::new(Session::new(prefs.settings, prefs.keymap)),
                 prefs_path,
+                models_dir,
                 portable,
                 app: app.handle().clone(),
                 canvas: Mutex::new(None),
@@ -179,6 +183,12 @@ pub fn run() {
             commands::filter_commit,
             commands::filter_cancel,
             commands::fonts_list,
+            commands::ai_select_subject,
+            commands::ai_remove_background,
+            commands::ai_inpaint,
+            commands::ai_models,
+            commands::ai_model_import,
+            commands::ai_model_remove,
             commands::text_set,
             commands::text_set_path,
             commands::shape_set_style,

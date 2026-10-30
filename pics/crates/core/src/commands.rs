@@ -597,6 +597,51 @@ impl Command for SetAdjustment {
     }
 }
 
+/// Change la nature et les pixels d'un calque en un seul état d'historique : édition d'un texte ou d'une forme
+/// (modèle + rendu), ou rastérisation (retour à un calque de pixels).
+pub struct SetLayerContent {
+    name: String,
+    layer: LayerId,
+    after: (crate::LayerKind, TileGrid),
+    before: Option<(crate::LayerKind, TileGrid)>,
+}
+
+impl SetLayerContent {
+    pub fn new(name: impl Into<String>, layer: LayerId, kind: crate::LayerKind, pixels: TileGrid) -> Self {
+        let kind = match kind {
+            crate::LayerKind::Text(t) => crate::LayerKind::Text(Box::new(t.sanitized())),
+            crate::LayerKind::Shape(v) => crate::LayerKind::Shape(Box::new(v.sanitized())),
+            crate::LayerKind::Adjustment(a) => crate::LayerKind::Adjustment(Box::new(a.sanitized())),
+            other => other,
+        };
+        Self { name: name.into(), layer, after: (kind, pixels), before: None }
+    }
+}
+
+impl Command for SetLayerContent {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn apply(&mut self, doc: &mut Document) -> Result<(), CoreError> {
+        let layer = doc.layer_mut(self.layer)?;
+        let old = (
+            std::mem::replace(&mut layer.kind, self.after.0.clone()),
+            std::mem::replace(&mut layer.pixels, self.after.1.clone()),
+        );
+        self.before = Some(old);
+        Ok(())
+    }
+
+    fn revert(&mut self, doc: &mut Document) -> Result<(), CoreError> {
+        let (kind, pixels) = self.before.take().ok_or(CoreError::LayerNotFound(self.layer.0))?;
+        let layer = doc.layer_mut(self.layer)?;
+        layer.kind = kind;
+        layer.pixels = pixels;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -886,5 +931,24 @@ mod tests {
             d.execute(Box::new(SetAdjustment::new("x", bottom, Adjustment::new(AdjKind::Invert)))),
             Err(CoreError::NotAdjustment(_))
         ));
+    }
+
+    #[test]
+    fn layer_content_changes_are_one_undoable_step_and_sanitized() {
+        use crate::text::TextModel;
+        let (mut d, bottom, _) = two_layer_doc();
+        let mut px = TileGrid::new(600, 600).unwrap();
+        px.put_pixel(3, 3, [9, 9, 9, 255]);
+        let wild = TextModel { size: f32::NAN, ..TextModel::default() };
+        d.execute(Box::new(SetLayerContent::new("Texte", bottom, crate::LayerKind::Text(Box::new(wild)), px))).unwrap();
+        let l = d.layer(bottom).unwrap();
+        assert_eq!(l.text().map(|t| t.size), Some(32.0));
+        assert!(l.has_pixels() && !l.is_raster());
+        assert_eq!(l.pixels.get_pixel(3, 3), [9, 9, 9, 255]);
+        d.undo().unwrap();
+        let l = d.layer(bottom).unwrap();
+        assert!(l.is_raster() && l.pixels.get_pixel(3, 3) == [0; 4]);
+        d.redo().unwrap();
+        assert!(d.layer(bottom).unwrap().text().is_some());
     }
 }

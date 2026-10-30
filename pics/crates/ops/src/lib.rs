@@ -9,7 +9,9 @@ pub mod liquify;
 pub mod retouch;
 pub mod selection;
 pub mod stats;
+pub mod text;
 pub mod transform;
+pub mod vector;
 
 use std::sync::Arc;
 

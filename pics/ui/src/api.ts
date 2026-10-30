@@ -23,10 +23,12 @@ import type { StyleDto } from "./gen/StyleDto";
 import type { Snapshot } from "./gen/Snapshot";
 import type { ThemeChoice } from "./gen/ThemeChoice";
 import type { TransformDto } from "./gen/TransformDto";
+import type { ShapeDto } from "./gen/ShapeDto";
+import type { TextDto } from "./gen/TextDto";
 import type { Tool } from "./gen/Tool";
 import type { ToolOptionsDto } from "./gen/ToolOptionsDto";
 
-export type { FilterInfoDto, AdjustmentDto, AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, PaintOptionsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
+export type { ShapeDto, TextDto, FilterInfoDto, AdjustmentDto, AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, PaintOptionsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
 
 /** Erreur typée côté TS : `code` est stable, `message` est affichable tel quel. */
 export class CommandError extends Error {
@@ -91,6 +93,15 @@ export const api = {
   filterPreview: (id: string, values: number[]) => call<Snapshot>("filter_preview", { id, values }),
   filterCommit: () => call<Snapshot>("filter_commit"),
   filterCancel: () => call<Snapshot>("filter_cancel"),
+  fonts: () => call<string[]>("fonts_list"),
+  textSet: (id: number, text: TextDto) => call<Snapshot>("text_set", { id, text }),
+  textSetPath: (id: number, shape: number | null) => call<Snapshot>("text_set_path", { id, shape }),
+  shapeSetStyle: (id: number, shape: ShapeDto) => call<Snapshot>("shape_set_style", { id, shape }),
+  shapeBoolean: (a: number, b: number, op: string) => call<Snapshot>("shape_boolean", { a, b, op }),
+  shapeToSelection: (id: number) => call<Snapshot>("shape_to_selection", { id }),
+  shapeExportSvg: (id: number, path: string) => call<void>("shape_export_svg", { id, path }),
+  layerRasterize: (id: number) => call<Snapshot>("layer_rasterize", { id }),
+  svgImport: (path: string) => call<Snapshot>("svg_import", { path }),
   maskAdd: (id: number, reveal: boolean) => call<Snapshot>("mask_add", { id, reveal }),
   maskRemove: (id: number) => call<Snapshot>("mask_remove", { id }),
   maskSetEnabled: (id: number, enabled: boolean) => call<Snapshot>("mask_set_enabled", { id, enabled }),

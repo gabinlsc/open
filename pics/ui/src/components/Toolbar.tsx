@@ -27,6 +27,12 @@ const TOOLS: { id: Tool; label: string; action: string; icon: JSX.Element }[] = 
   { id: "burn", label: "Densité +", action: "tool.burn", icon: <Glyph>◑</Glyph> },
   { id: "sponge", label: "Éponge", action: "tool.sponge", icon: <Glyph>▒</Glyph> },
   { id: "liquify", label: "Fluidité", action: "tool.liquify", icon: <Glyph>≋</Glyph> },
+  { id: "text", label: "Texte", action: "tool.text", icon: <Glyph>T</Glyph> },
+  { id: "pen", label: "Plume", action: "tool.pen", icon: <Glyph>✒</Glyph> },
+  { id: "shape_rect", label: "Rectangle", action: "tool.shape_rect", icon: <Glyph>▭</Glyph> },
+  { id: "shape_rounded_rect", label: "Rectangle arrondi", action: "tool.shape_rounded", icon: <Glyph>▢</Glyph> },
+  { id: "shape_ellipse", label: "Ellipse", action: "tool.shape_ellipse", icon: <Glyph>◯</Glyph> },
+  { id: "shape_line", label: "Ligne", action: "tool.shape_line", icon: <Glyph>╱</Glyph> },
 ];
 
 export function Toolbar() {

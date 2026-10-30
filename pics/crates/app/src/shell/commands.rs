@@ -9,7 +9,7 @@ use tauri::State;
 use super::Shared;
 use crate::dto::{
     AppStatus, AxisDto, CanvasRect, GuideDrag, ImageOp, KeymapDto, LayerPropsDto, OpenResult, PaintOptionsDto,
-    ResolvedTheme, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto,
+    ResolvedTheme, SettingsDto, ShapeDto, Snapshot, StyleDto, TextDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto,
 };
 use crate::error::{ApiError, SessionError};
 use crate::session::Session;
@@ -275,6 +275,56 @@ pub fn filter_cancel(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
         s.filter_cancel();
         Ok(())
     })
+}
+
+#[tauri::command]
+pub async fn fonts_list() -> ApiResult<Vec<String>> {
+    // Premier appel : le moteur de texte analyse les polices installées (lent), d'où `async`.
+    Ok(openpics_ops::text::families())
+}
+
+#[tauri::command]
+pub async fn text_set(shared: State<'_, Shared>, id: u64, text: TextDto) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.text_set(id, &text))
+}
+
+#[tauri::command]
+pub async fn text_set_path(shared: State<'_, Shared>, id: u64, shape: Option<u64>) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.text_set_path(id, shape))
+}
+
+#[tauri::command]
+pub fn shape_set_style(shared: State<'_, Shared>, id: u64, shape: ShapeDto) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.shape_set_style(id, &shape))
+}
+
+#[tauri::command]
+pub fn shape_boolean(shared: State<'_, Shared>, a: u64, b: u64, op: String) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| {
+        let op = crate::dto::parse_boolean_op(&op)
+            .ok_or_else(|| SessionError::InvalidArgument(format!("opération inconnue : {op}")))?;
+        s.shape_boolean(a, b, op)
+    })
+}
+
+#[tauri::command]
+pub fn shape_to_selection(shared: State<'_, Shared>, id: u64) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.shape_to_selection(id))
+}
+
+#[tauri::command]
+pub fn shape_export_svg(shared: State<'_, Shared>, id: u64, path: String) -> ApiResult<()> {
+    Ok(shared.lock()?.shape_export_svg(id, &PathBuf::from(path))?)
+}
+
+#[tauri::command]
+pub fn layer_rasterize(shared: State<'_, Shared>, id: u64) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.layer_rasterize(id))
+}
+
+#[tauri::command]
+pub async fn svg_import(shared: State<'_, Shared>, path: String) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.svg_import(&PathBuf::from(path)).map(|_| ()))
 }
 
 #[tauri::command]

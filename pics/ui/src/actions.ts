@@ -196,6 +196,31 @@ export const ACTIONS: Record<string, ActionDef> = {
     },
   },
   "tool.liquify": { label: "Fluidité", run: () => void st().run(() => api.setTool("liquify")) },
+  "tool.text": { label: "Texte", run: () => void st().run(() => api.setTool("text")) },
+  "tool.shape_rect": { label: "Rectangle", run: () => void st().run(() => api.setTool("shape_rect")) },
+  "tool.shape_rounded": { label: "Rectangle arrondi", run: () => void st().run(() => api.setTool("shape_rounded_rect")) },
+  "tool.shape_ellipse": { label: "Ellipse", run: () => void st().run(() => api.setTool("shape_ellipse")) },
+  "tool.shape_line": { label: "Ligne", run: () => void st().run(() => api.setTool("shape_line")) },
+  "tool.pen": { label: "Plume", run: () => void st().run(() => api.setTool("pen")) },
+  "layer.rasterize": {
+    label: "Rastériser le calque",
+    run: () => {
+      const l = activeLayer();
+      if (l) void st().run(() => api.layerRasterize(l.id));
+    },
+    enabled: () => {
+      const l = activeLayer();
+      return !!l && (!!l.text || !!l.shape);
+    },
+  },
+  "file.import_svg": {
+    label: "Importer un SVG…",
+    run: async () => {
+      const picked = await open({ multiple: false, filters: [{ name: "SVG", extensions: ["svg"] }] });
+      if (typeof picked === "string") await st().run(() => api.svgImport(picked));
+    },
+    enabled: hasDoc,
+  },
   "tool.hand": { label: "Outil Main", run: () => void st().run(() => api.setTool("hand")) },
   "tool.zoom": { label: "Outil Zoom", run: () => void st().run(() => api.setTool("zoom")) },
 };

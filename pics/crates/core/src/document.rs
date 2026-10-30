@@ -8,7 +8,9 @@ use crate::error::CoreError;
 use crate::geom::Size;
 use crate::history::{Command, History};
 use crate::styles::LayerStyle;
+use crate::text::TextModel;
 use crate::tile::TileGrid;
+use crate::vector::VectorModel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DocId(pub u64);
@@ -87,6 +89,10 @@ pub enum LayerKind {
         isolated: bool,
     },
     Adjustment(Box<Adjustment>),
+    /// Texte : le modèle est la source ; les pixels du calque en sont le rendu en cache.
+    Text(Box<TextModel>),
+    /// Forme vectorielle : idem, les pixels sont le rendu du modèle.
+    Shape(Box<VectorModel>),
 }
 
 /// Calque raster ou groupe (un groupe n'a pas de pixels propres : sa grille reste vide). Les réglages, textes
@@ -143,6 +149,25 @@ impl Layer {
     /// Calque de pixels : le seul type que l'on peut peindre, transformer ou filtrer.
     pub fn is_raster(&self) -> bool {
         matches!(self.kind, LayerKind::Raster)
+    }
+
+    /// Vrai si le calque porte des pixels (raster, texte, forme) ; faux pour un groupe ou un réglage.
+    pub fn has_pixels(&self) -> bool {
+        matches!(self.kind, LayerKind::Raster | LayerKind::Text(_) | LayerKind::Shape(_))
+    }
+
+    pub fn text(&self) -> Option<&TextModel> {
+        match &self.kind {
+            LayerKind::Text(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    pub fn shape(&self) -> Option<&VectorModel> {
+        match &self.kind {
+            LayerKind::Shape(v) => Some(v),
+            _ => None,
+        }
     }
 
     pub fn adjustment(&self) -> Option<&Adjustment> {

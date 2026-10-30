@@ -15,7 +15,9 @@ pub mod selection;
 pub mod shortcuts;
 pub mod snap;
 pub mod styles;
+pub mod text;
 pub mod tile;
+pub mod vector;
 pub mod view;
 
 pub use blend::BlendMode;

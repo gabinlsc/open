@@ -4,4 +4,4 @@ import type { LocksDto } from "./LocksDto";
 /**
  * Propriétés modifiables d'un calque (la liaison n'a pas encore d'interface).
  */
-export type LayerPropsDto = { name: string, visible: boolean, opacity: number, fill: number, blend: string, locks: LocksDto, clipToBelow: boolean, };
+export type LayerPropsDto = { name: string, visible: boolean, opacity: number, fill: number, blend: string, locks: LocksDto, clipToBelow: boolean, isolated: boolean, };

@@ -177,14 +177,35 @@ fn apply_styles(doc: &Document, layer: &Layer, key: TileKey, content: &[Px]) -> 
     out
 }
 
+/// Contenu d'un calque pour une tuile : ses pixels, ou pour un groupe isolé le résultat de ses enfants.
+fn layer_content(doc: &Document, layer: &Layer, key: TileKey) -> Option<Content> {
+    if !layer.is_group() {
+        return content(layer, key);
+    }
+    let mut buf = vec![[0.0; 4]; N];
+    compose_into(doc, Some(layer.id), key, &mut buf);
+    let mask = read_mask(layer, key);
+    for (i, p) in buf.iter_mut().enumerate() {
+        p[3] *= layer.fill * mask.as_ref().map_or(1.0, |m| m[i]);
+    }
+    Some(Content { px: buf })
+}
+
 /// Composition d'une tuile : un calque de base et les calques écrêtés qui le suivent forment un groupe
-/// d'écrêtage, composé à part puis fusionné avec le mode et l'opacité de la base.
+/// d'écrêtage, composé à part puis fusionné avec le mode et l'opacité de la base. Un groupe est composé
+/// récursivement : isolé (ses enfants forment d'abord une image, fusionnée ensuite comme un calque) ou
+/// « traverser » (ses enfants se fusionnent directement avec ce qui est dessous).
 pub fn composite_tile(doc: &Document, key: TileKey) -> Vec<Px> {
     let mut backdrop = vec![[0.0; 4]; N];
-    let layers = &doc.layers;
+    compose_into(doc, None, key, &mut backdrop);
+    backdrop
+}
+
+fn compose_into(doc: &Document, parent: Option<crate::LayerId>, key: TileKey, backdrop: &mut [Px]) {
+    let layers: Vec<&Layer> = doc.layers.iter().filter(|l| l.group == parent).collect();
     let mut i = 0;
     while i < layers.len() {
-        let base = &layers[i];
+        let base = layers[i];
         let mut end = i + 1;
         while end < layers.len() && layers[end].clip_to_below {
             end += 1;
@@ -194,13 +215,25 @@ pub fn composite_tile(doc: &Document, key: TileKey) -> Vec<Px> {
         if !base.visible {
             continue; // un calque caché cache aussi ce qui lui est écrêté
         }
-        let styled = !base.styles.is_empty();
-        let Some(mut group) = content(base, key).or_else(|| styled.then(|| Content { px: vec![[0.0; 4]; N] })) else {
+        if matches!(base.kind, crate::LayerKind::Group { isolated: false })
+            && base.blend == BlendMode::Normal
+            && base.opacity >= 1.0
+            && base.fill >= 1.0
+            && base.mask.is_none()
+            && clipped.is_empty()
+        {
+            compose_into(doc, Some(base.id), key, backdrop);
+            continue;
+        }
+        let styled = !base.styles.is_empty() && !base.is_group();
+        let Some(mut group) =
+            layer_content(doc, base, key).or_else(|| styled.then(|| Content { px: vec![[0.0; 4]; N] }))
+        else {
             continue;
         };
         let base_alpha: Vec<f32> = group.px.iter().map(|p| p[3]).collect();
         for layer in clipped.iter().filter(|l| l.visible) {
-            let Some(src) = content(layer, key) else { continue };
+            let Some(src) = layer_content(doc, layer, key) else { continue };
             let (ox, oy) = tile_origin(key);
             for (idx, (g, s)) in group.px.iter_mut().zip(&src.px).enumerate() {
                 let alpha = s[3] * layer.opacity * base_alpha[idx];
@@ -216,9 +249,8 @@ pub fn composite_tile(doc: &Document, key: TileKey) -> Vec<Px> {
         if styled {
             group.px = apply_styles(doc, base, key, &group.px);
         }
-        blend_onto(&mut backdrop, &group.px, base.blend, base.opacity, key);
+        blend_onto(backdrop, &group.px, base.blend, base.opacity, key);
     }
-    backdrop
 }
 
 /// Aplatit le document en RGBA 8 bits non prémultiplié.
@@ -480,5 +512,86 @@ mod tests {
         d.layer_mut(top).unwrap().clip_to_below = true;
         assert_eq!(px(&d, 25, 25), [0, 0, 255, 255]);
         assert_eq!(px(&d, 33, 25), [0, 0, 0, 255], "l'ombre n'est pas recouverte par le calque écrêté");
+    }
+
+    fn group_doc() -> (Document, crate::LayerId, crate::LayerId, crate::LayerId) {
+        // Fond blanc ; un groupe contenant deux calques : rouge (bas) et bleu (haut), chacun sur un pixel.
+        let mut d = doc(8, 1);
+        d.layers[0].pixels = solid(8, 1, [255, 255, 255, 255]);
+        let g = crate::LayerId(d.alloc_id());
+        d.layers.push(Layer::new_group(g, "Groupe", TileGrid::new(8, 1).unwrap()));
+        let mut red = TileGrid::new(8, 1).unwrap();
+        red.put_pixel(2, 0, [255, 0, 0, 255]);
+        let r = d.add_layer("rouge", red);
+        let mut blue = TileGrid::new(8, 1).unwrap();
+        blue.put_pixel(2, 0, [0, 0, 255, 255]);
+        blue.put_pixel(3, 0, [0, 0, 255, 255]);
+        let b = d.add_layer("bleu", blue);
+        d.layer_mut(r).unwrap().group = Some(g);
+        d.layer_mut(b).unwrap().group = Some(g);
+        (d, g, r, b)
+    }
+
+    #[test]
+    fn group_children_composite_like_a_flat_stack_when_isolated_and_normal() {
+        let (d, ..) = group_doc();
+        assert_eq!(px(&d, 2, 0), [0, 0, 255, 255], "le calque bleu est au-dessus du rouge dans le groupe");
+        assert_eq!(px(&d, 3, 0), [0, 0, 255, 255]);
+        assert_eq!(px(&d, 5, 0), [255, 255, 255, 255]);
+    }
+
+    #[test]
+    fn group_opacity_applies_to_the_whole_group_once() {
+        let (mut d, g, ..) = group_doc();
+        d.layer_mut(g).unwrap().opacity = 0.5;
+        // Pixel 2 : rouge recouvert par le bleu DANS le groupe, puis le groupe à 50 % sur blanc.
+        // Appliquer 50 % à chaque enfant laisserait transparaître du rouge ; l'isolation l'interdit.
+        let p = px(&d, 2, 0);
+        assert!(p[0] > 120 && p[0] < 135 && p[2] == 255, "{p:?}");
+    }
+
+    #[test]
+    fn multiply_inside_an_isolated_group_does_not_reach_the_backdrop_but_pass_through_does() {
+        let (mut d, g, r, _) = group_doc();
+        d.layer_mut(r).unwrap().blend = BlendMode::Multiply;
+        d.layer_mut(r).unwrap().visible = true;
+        // Isolé : le rouge « multiplie » le vide du groupe → il reste rouge opaque (puis recouvert par le bleu).
+        d.layers.iter_mut().find(|l| l.name == "bleu").unwrap().visible = false;
+        assert_eq!(px(&d, 2, 0), [255, 0, 0, 255]);
+        // Traverser : le rouge multiplie le fond blanc, le résultat est le même ici ; avec un fond gris la différence se voit.
+        d.layers[0].pixels = solid(8, 1, [128, 128, 128, 255]);
+        let isolated = px(&d, 2, 0);
+        d.layer_mut(g).unwrap().kind = crate::LayerKind::Group { isolated: false };
+        let pass = px(&d, 2, 0);
+        assert_eq!(isolated, [255, 0, 0, 255]);
+        assert_eq!(pass, [128, 0, 0, 255], "multiplier le gris par le rouge");
+    }
+
+    #[test]
+    fn hidden_group_hides_its_children_and_group_mask_applies() {
+        let (mut d, g, ..) = group_doc();
+        d.layer_mut(g).unwrap().visible = false;
+        assert_eq!(px(&d, 2, 0), [255, 255, 255, 255]);
+        d.layer_mut(g).unwrap().visible = true;
+        let mut m = TileGrid::new(8, 1).unwrap();
+        m.put_pixel(3, 0, [255; 4]);
+        d.layer_mut(g).unwrap().mask = Some(Mask { pixels: m, enabled: true });
+        assert_eq!(px(&d, 2, 0), [255, 255, 255, 255], "masqué par le masque du groupe");
+        assert_eq!(px(&d, 3, 0), [0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn nested_groups_compose_and_the_tree_order_lists_children_after_their_group() {
+        let (mut d, g, _, b) = group_doc();
+        let inner = crate::LayerId(d.alloc_id());
+        d.layers.push(Layer::new_group(inner, "Interne", TileGrid::new(8, 1).unwrap()));
+        d.layer_mut(inner).unwrap().group = Some(g);
+        d.layer_mut(b).unwrap().group = Some(inner);
+        assert_eq!(px(&d, 3, 0), [0, 0, 255, 255]);
+        let order = d.tree_top_first();
+        let pos = |id| order.iter().position(|(l, _)| *l == id).unwrap();
+        assert!(pos(g) < pos(inner) && pos(inner) < pos(b));
+        assert_eq!(d.depth(b), 2);
+        assert!(d.is_ancestor_or_self(g, b) && !d.is_ancestor_or_self(b, g));
     }
 }

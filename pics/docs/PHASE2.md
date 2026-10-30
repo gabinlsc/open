@@ -1,4 +1,4 @@
-# Phase 2 — Calques (tranches 1 et 2)
+# Phase 2 — Calques (tranches 1 à 3)
 
 La phase est découpée en tranches vérifiables. Cette page dit ce qui est fait, ce qui reste, et où en sont les critères d'acceptation fixés dans `PHASE1.md` §7.
 
@@ -24,17 +24,24 @@ Les opérations s'appliquent au **calque actif**.
 - **Interface** : section Styles (cinq types, couleurs, valeurs numériques validées) et boîte « Transformer… » (échelle avec proportions liées, rotation, déplacement, autour du centre du document).
 - **Test de propriété** (`proptest`) : sur des séquences aléatoires d'actions (ajout/suppression/ordre de calques, propriétés, masques, styles, peinture, repères), tout annuler puis tout rétablir restitue exactement chaque état. Il a permis de corriger une faute de mon harnais ; aucun défaut du cœur trouvé.
 
+## Tranche 3 — groupes de calques et mipmaps
+
+- **Groupes** (`Layer::kind`, `Layer::group`) : imbrication arbitraire, isolés ou « traverser », avec opacité, mode, masque et écrêtage propres ; supprimer un groupe emporte et restitue (annulation) tout son contenu ; cycles et cibles non-groupes refusés. Un groupe n'est pas un calque raster : les opérations de pixels le refusent.
+- **Format `.ocv`** : parent et type de groupe persistés ; un fichier trafiqué (parent absent, boucle, parent non-groupe) est assaini à la lecture.
+- **Interface** : panneau en arbre indenté, « Groupe », « Dans le groupe », « Traverser », monter/descendre parmi les frères.
+- **Rendu** : mipmaps par tuile (moyenne pondérée par l'alpha, jusqu'à 16×16) et filtrage trilinéaire en dézoomant : plus de crénelage ; vérifié sur GPU.
+- Test de propriété étendu aux groupes.
+
 ## Vérifié
 
-168 tests Rust (core 77 + 1 propriété, ops 16, io 15, gpu 8, app 51), 20 tests de l'interface ; fmt ; clippy sur Linux et `x86_64-pc-windows-gnu` ; `cargo deny` ; rendu GPU exécuté sur Vulkan logiciel ; captures de l'interface relues. **Non exécuté sous Windows.**
+189 tests Rust (core 84 + 1 propriété, ops 16, io 16, gpu 10, app 53), 20 tests de l'interface ; fmt ; clippy sur Linux et `x86_64-pc-windows-gnu` ; `cargo deny` ; rendu GPU exécuté sur Vulkan logiciel ; captures de l'interface relues. **Non exécuté sous Windows.**
 
 ## Reste à faire pour clore la phase
 
 | Élément | État |
 |---|---|
-| Groupes de calques (arbre, groupes isolés / « traverser ») | à faire : `Layer` reste une liste plate |
 | Shaders WGSL des 27 modes et des styles + comparaison GPU ↔ CPU (≤ 1/255) | à faire : le GPU affiche le résultat du compositeur CPU |
-| Pyramide de niveaux de détail (dette de la phase 1) | à faire |
+| Pyramide de niveaux de détail : le coût d'un très grand document dézoomé reste de dessiner beaucoup de tuiles (les mipmaps règlent le crénelage, pas le nombre de tuiles) | partiel |
 | Interface de la perspective et de la déformation par grille | à faire (le calcul existe et est testé) |
 | Liaison de calques : interface (les calques liés ne bougent pas encore ensemble) | à faire |
 | Transformation interactive à la souris (poignées) | à faire |

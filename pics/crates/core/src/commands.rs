@@ -270,14 +270,15 @@ impl Command for AddLayer {
     }
 }
 
+/// Supprime un calque ; pour un groupe, tout son contenu part avec lui (et revient à l'annulation).
 pub struct RemoveLayer {
     id: LayerId,
-    removed: Option<(usize, Layer)>,
+    removed: Vec<(usize, Layer)>,
 }
 
 impl RemoveLayer {
     pub fn new(id: LayerId) -> Self {
-        Self { id, removed: None }
+        Self { id, removed: Vec::new() }
     }
 }
 
@@ -287,14 +288,73 @@ impl Command for RemoveLayer {
     }
 
     fn apply(&mut self, doc: &mut Document) -> Result<(), CoreError> {
-        let idx = doc.layers.iter().position(|l| l.id == self.id).ok_or(CoreError::LayerNotFound(self.id.0))?;
-        self.removed = Some((idx, doc.layers.remove(idx)));
+        if !doc.layers.iter().any(|l| l.id == self.id) {
+            return Err(CoreError::LayerNotFound(self.id.0));
+        }
+        let doomed: Vec<usize> = doc
+            .layers
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| doc.is_ancestor_or_self(self.id, l.id))
+            .map(|(i, _)| i)
+            .collect();
+        self.removed.clear();
+        // De la fin vers le début pour que les index restent valides pendant la suppression.
+        for &i in doomed.iter().rev() {
+            self.removed.push((i, doc.layers.remove(i)));
+        }
+        self.removed.reverse();
         Ok(())
     }
 
     fn revert(&mut self, doc: &mut Document) -> Result<(), CoreError> {
-        let (idx, layer) = self.removed.take().ok_or(CoreError::LayerNotFound(self.id.0))?;
-        doc.layers.insert(idx.min(doc.layers.len()), layer);
+        if self.removed.is_empty() {
+            return Err(CoreError::LayerNotFound(self.id.0));
+        }
+        // Dans l'ordre croissant des index d'origine : chaque insertion retrouve sa place.
+        for (idx, layer) in self.removed.drain(..) {
+            doc.layers.insert(idx.min(doc.layers.len()), layer);
+        }
+        Ok(())
+    }
+}
+
+/// Place un calque dans un groupe (ou à la racine avec `None`).
+pub struct SetLayerGroup {
+    layer: LayerId,
+    group: Option<LayerId>,
+    before: Option<Option<LayerId>>,
+}
+
+impl SetLayerGroup {
+    pub fn new(layer: LayerId, group: Option<LayerId>) -> Self {
+        Self { layer, group, before: None }
+    }
+}
+
+impl Command for SetLayerGroup {
+    fn name(&self) -> &str {
+        "Changer de groupe"
+    }
+
+    fn apply(&mut self, doc: &mut Document) -> Result<(), CoreError> {
+        if let Some(g) = self.group {
+            if !doc.layer(g)?.is_group() {
+                return Err(CoreError::NotAGroup(g.0));
+            }
+            if doc.is_ancestor_or_self(self.layer, g) {
+                return Err(CoreError::GroupCycle);
+            }
+        }
+        let layer = doc.layer_mut(self.layer)?;
+        self.before = Some(layer.group);
+        layer.group = self.group;
+        Ok(())
+    }
+
+    fn revert(&mut self, doc: &mut Document) -> Result<(), CoreError> {
+        let before = self.before.ok_or(CoreError::LayerNotFound(self.layer.0))?;
+        doc.layer_mut(self.layer)?.group = before;
         Ok(())
     }
 }
@@ -689,5 +749,37 @@ mod tests {
         assert!(d.layer(top).unwrap().styles.is_empty());
         d.redo().unwrap();
         assert_eq!(d.layer(top).unwrap().styles.len(), 1);
+    }
+
+    #[test]
+    fn grouping_rejects_cycles_non_groups_and_is_undoable() {
+        let (mut d, bottom, top) = two_layer_doc();
+        let g = LayerId(d.alloc_id());
+        d.execute(Box::new(AddLayer::new(2, Layer::new_group(g, "G", TileGrid::new(600, 600).unwrap())))).unwrap();
+        d.execute(Box::new(SetLayerGroup::new(top, Some(g)))).unwrap();
+        assert_eq!(d.layer(top).unwrap().group, Some(g));
+        assert!(matches!(d.execute(Box::new(SetLayerGroup::new(bottom, Some(top)))), Err(CoreError::NotAGroup(_))));
+        let inner = LayerId(d.alloc_id());
+        d.execute(Box::new(AddLayer::new(3, Layer::new_group(inner, "I", TileGrid::new(600, 600).unwrap())))).unwrap();
+        d.execute(Box::new(SetLayerGroup::new(inner, Some(g)))).unwrap();
+        assert!(matches!(d.execute(Box::new(SetLayerGroup::new(g, Some(inner)))), Err(CoreError::GroupCycle)));
+        assert!(matches!(d.execute(Box::new(SetLayerGroup::new(g, Some(g)))), Err(CoreError::GroupCycle)));
+        d.undo().unwrap();
+        d.undo().unwrap();
+        assert_eq!(d.layer(top).unwrap().group, Some(g));
+    }
+
+    #[test]
+    fn removing_a_group_removes_and_restores_its_whole_subtree_in_place() {
+        let (mut d, bottom, top) = two_layer_doc();
+        let g = LayerId(d.alloc_id());
+        d.execute(Box::new(AddLayer::new(1, Layer::new_group(g, "G", TileGrid::new(600, 600).unwrap())))).unwrap();
+        d.execute(Box::new(SetLayerGroup::new(top, Some(g)))).unwrap();
+        let order: Vec<_> = d.layers.iter().map(|l| l.id).collect();
+        d.execute(Box::new(RemoveLayer::new(g))).unwrap();
+        assert_eq!(d.layers.iter().map(|l| l.id).collect::<Vec<_>>(), vec![bottom]);
+        d.undo().unwrap();
+        assert_eq!(d.layers.iter().map(|l| l.id).collect::<Vec<_>>(), order);
+        assert_eq!(d.layer(top).unwrap().group, Some(g));
     }
 }

@@ -6,8 +6,8 @@
 use std::path::{Path, PathBuf};
 
 use openpics_core::commands::{
-    AddGuide, AddLayer, AddMask, ClearGuides, MoveLayer, RemoveGuide, RemoveLayer, RemoveMask, SetLayerProps,
-    SetLayerStyles, SetMaskEnabled,
+    AddGuide, AddLayer, AddMask, ClearGuides, MoveLayer, RemoveGuide, RemoveLayer, RemoveMask, SetLayerGroup,
+    SetLayerProps, SetLayerStyles, SetMaskEnabled,
 };
 use openpics_core::shortcuts::{Chord, Keymap};
 use openpics_core::snap::snap_axis;
@@ -393,6 +393,58 @@ impl Session {
         Ok(id.0)
     }
 
+    /// Nouveau groupe vide juste au-dessus du calque actif, dans le même groupe parent.
+    pub fn group_add(&mut self) -> Result<u64, SessionError> {
+        let e = self.entry_mut()?;
+        let size = e.doc.size();
+        let active = e.active_layer.and_then(|a| e.doc.layers.iter().position(|l| l.id == a));
+        let index = active.map_or(e.doc.layers.len(), |i| i + 1);
+        let parent = active.and_then(|i| e.doc.layers[i].group);
+        let id = LayerId(e.doc.alloc_id());
+        let mut group = Layer::new_group(
+            id,
+            format!("Groupe {}", e.doc.layers.iter().filter(|l| l.is_group()).count() + 1),
+            TileGrid::new(size.width, size.height)?,
+        );
+        group.group = parent;
+        e.doc.execute(Box::new(AddLayer::new(index, group)))?;
+        e.active_layer = Some(id);
+        Ok(id.0)
+    }
+
+    /// Place un calque dans un groupe (`None` = niveau supérieur).
+    pub fn layer_set_group(&mut self, id: u64, group: Option<u64>) -> Result<(), SessionError> {
+        let e = self.entry_mut()?;
+        if e.doc.layer(LayerId(id))?.group == group.map(LayerId) {
+            return Ok(());
+        }
+        e.doc.execute(Box::new(SetLayerGroup::new(LayerId(id), group.map(LayerId))))?;
+        Ok(())
+    }
+
+    /// Monte ou descend d'un cran parmi les calques du même groupe.
+    pub fn layer_move_step(&mut self, id: u64, up: bool) -> Result<(), SessionError> {
+        let e = self.entry_mut()?;
+        let layers = &e.doc.layers;
+        let idx = layers
+            .iter()
+            .position(|l| l.id.0 == id)
+            .ok_or(SessionError::Core(openpics_core::CoreError::LayerNotFound(id)))?;
+        let parent = layers[idx].group;
+        let sibling = if up {
+            (idx + 1..layers.len()).find(|&i| layers[i].group == parent)
+        } else {
+            (0..idx).rev().find(|&i| layers[i].group == parent)
+        };
+        match sibling {
+            Some(to) => {
+                e.doc.execute(Box::new(MoveLayer::new(LayerId(id), to)))?;
+                Ok(())
+            }
+            None => Ok(()), // déjà au bout de son groupe
+        }
+    }
+
     pub fn layer_remove(&mut self, id: u64) -> Result<(), SessionError> {
         let e = self.entry_mut()?;
         if e.doc.layers.len() <= 1 {
@@ -404,9 +456,14 @@ impl Session {
             .iter()
             .position(|l| l.id.0 == id)
             .ok_or(SessionError::Core(openpics_core::CoreError::LayerNotFound(id)))?;
+        // Supprimer un groupe emporte tout son contenu : il doit rester au moins un calque.
+        let doomed = e.doc.layers.iter().filter(|l| e.doc.is_ancestor_or_self(LayerId(id), l.id)).count();
+        if doomed >= e.doc.layers.len() {
+            return Err(SessionError::InvalidArgument("un document doit garder au moins un calque".into()));
+        }
         e.doc.execute(Box::new(RemoveLayer::new(LayerId(id))))?;
-        if e.active_layer == Some(LayerId(id)) {
-            e.active_layer = e.doc.layers.get(idx.saturating_sub(1)).map(|l| l.id);
+        if e.active_layer.is_some_and(|a| e.doc.layer(a).is_err()) {
+            e.active_layer = e.doc.layers.get(idx.saturating_sub(1)).or_else(|| e.doc.layers.last()).map(|l| l.id);
         }
         Ok(())
     }
@@ -540,7 +597,11 @@ impl Session {
                 let (names, position) = e.doc.history().entries();
                 (
                     e.doc.guides.iter().map(GuideDto::from).collect(),
-                    e.doc.layers.iter().rev().map(LayerDto::from).collect(),
+                    e.doc
+                        .tree_top_first()
+                        .into_iter()
+                        .filter_map(|(id, depth)| e.doc.layer(id).ok().map(|l| LayerDto { depth, ..LayerDto::from(l) }))
+                        .collect(),
                     e.active_layer.map(|l| l.0),
                     HistoryDto { names, position },
                     e.doc.history().can_undo(),
@@ -821,6 +882,7 @@ mod tests {
             blend: l.blend.clone(),
             locks: l.locks,
             clip_to_below: l.clip_to_below,
+            isolated: l.isolated,
         }
     }
 
@@ -973,5 +1035,48 @@ mod tests {
         s.layer_set_props(id, &p).unwrap();
         let err = s.layer_transform(&moved).unwrap_err().to_string();
         assert!(err.contains("verrouillé"), "{err}");
+    }
+
+    #[test]
+    fn groups_nest_move_and_delete_through_the_session() {
+        let mut s = session();
+        s.new_document(None, 20, 20).unwrap();
+        let bottom = s.snapshot().layers[0].id;
+        let g = s.group_add().unwrap();
+        let snap = s.snapshot();
+        assert!(snap.layers[0].is_group && snap.layers[0].id == g && snap.layers[0].isolated);
+        s.layer_set_group(bottom, Some(g)).unwrap();
+        let snap = s.snapshot();
+        assert_eq!((snap.layers[1].id, snap.layers[1].depth, snap.layers[1].group), (bottom, 1, Some(g)));
+        s.layer_select(g).unwrap();
+        assert!(s.apply_op(ImageOp::Invert).unwrap_err().to_string().contains("groupe"));
+        assert!(s.layer_set_group(g, Some(g)).is_err());
+        assert!(s.layer_set_group(g, Some(bottom)).is_err());
+        assert!(
+            matches!(s.layer_remove(g), Err(SessionError::InvalidArgument(_))),
+            "il faut garder au moins un calque"
+        );
+        let extra = s.layer_add().unwrap();
+        s.layer_remove(g).unwrap();
+        let snap = s.snapshot();
+        assert_eq!(snap.layers.iter().map(|l| l.id).collect::<Vec<_>>(), vec![extra]);
+        assert_eq!(snap.active_layer_id, Some(extra));
+        s.undo().unwrap();
+        assert_eq!(s.snapshot().layers.len(), 3);
+    }
+
+    #[test]
+    fn move_step_swaps_with_the_sibling_inside_the_same_group() {
+        let mut s = session();
+        s.new_document(None, 20, 20).unwrap();
+        let a = s.snapshot().layers[0].id;
+        let b = s.layer_add().unwrap();
+        let ids = |s: &Session| s.snapshot().layers.iter().map(|l| l.id).collect::<Vec<_>>();
+        assert_eq!(ids(&s), vec![b, a]);
+        s.layer_move_step(b, false).unwrap();
+        assert_eq!(ids(&s), vec![a, b]);
+        let n = s.snapshot().history.names.len();
+        s.layer_move_step(b, false).unwrap(); // déjà tout en bas : sans effet ni état d'historique
+        assert_eq!(s.snapshot().history.names.len(), n);
     }
 }

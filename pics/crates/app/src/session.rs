@@ -43,6 +43,7 @@ struct DocEntry {
 mod ai;
 mod filters;
 mod paint;
+mod recover;
 mod tools;
 mod vector;
 pub use tools::Pointer;
@@ -70,6 +71,8 @@ pub struct Session {
     pub pan_modifier: bool,
     preview_guide: Option<(Axis, f64)>,
     untitled: u32,
+    recovery_dir: Option<PathBuf>,
+    recovery_tag: String,
 }
 
 /// Ce dont le rendu a besoin, copié sous le verrou puis utilisé sans lui.
@@ -107,6 +110,13 @@ impl Session {
             pan_modifier: false,
             preview_guide: None,
             untitled: 0,
+            recovery_dir: None,
+            // Distingue les copies de cette exécution de celles d'un plantage précédent (les identifiants de
+            // document repartent de 1 à chaque lancement).
+            recovery_tag: format!(
+                "s{}",
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis())
+            ),
         }
     }
 
@@ -188,7 +198,8 @@ impl Session {
     pub fn close(&mut self, id: u64) -> Result<(), SessionError> {
         self.filter_cancel();
         let idx = self.docs.iter().position(|e| e.doc.id.0 == id).ok_or(SessionError::DocumentNotFound(id))?;
-        self.docs.remove(idx);
+        let removed = self.docs.remove(idx);
+        self.drop_recovery(removed.doc.id.0);
         if self.active == Some(DocId(id)) {
             self.active = self.docs.get(idx.saturating_sub(1)).map(|e| e.doc.id);
             self.preview_guide = None;
@@ -208,6 +219,8 @@ impl Session {
         let target = path.or_else(|| entry.doc.path.clone()).ok_or(SessionError::NeedsPath)?;
         let target = with_extension(target, "ocv");
         openpics_io::save(&mut entry.doc, &target)?;
+        let id = entry.doc.id.0;
+        self.drop_recovery(id);
         Ok(())
     }
 

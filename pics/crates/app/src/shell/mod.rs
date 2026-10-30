@@ -18,6 +18,7 @@ pub struct AppShared {
     pub session: Mutex<Session>,
     prefs_path: PathBuf,
     models_dir: PathBuf,
+    recovery_dir: PathBuf,
     portable: bool,
     app: AppHandle,
     canvas: Mutex<Option<native::Canvas>>,
@@ -111,6 +112,18 @@ impl AppShared {
     }
 }
 
+/// Copie de récupération toutes les 60 s ; une erreur d'écriture ne doit jamais gêner le travail en cours.
+fn spawn_autosave(shared: Shared) {
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(60));
+            if let Ok(mut session) = shared.session.lock() {
+                let _ = session.autosave();
+            }
+        }
+    });
+}
+
 pub fn run() {
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -121,16 +134,22 @@ pub fn run() {
             let base_dir = config_dir(exe_dir.as_deref(), default_dir);
             let prefs_path = base_dir.join("prefs.json");
             let models_dir = base_dir.join("models");
+            let recovery_dir = base_dir.join("recovery");
             let prefs = Prefs::load(&prefs_path);
             let shared: Shared = Arc::new(AppShared {
                 session: Mutex::new(Session::new(prefs.settings, prefs.keymap)),
                 prefs_path,
                 models_dir,
+                recovery_dir: recovery_dir.clone(),
                 portable,
                 app: app.handle().clone(),
                 canvas: Mutex::new(None),
                 gpu_error: Mutex::new(None),
             });
+            if let Ok(mut session) = shared.session.lock() {
+                session.set_recovery_dir(recovery_dir);
+            }
+            spawn_autosave(shared.clone());
             app.manage(shared.clone());
             match native::Canvas::attach(app.handle(), &shared) {
                 Ok(canvas) => {
@@ -183,6 +202,10 @@ pub fn run() {
             commands::filter_commit,
             commands::filter_cancel,
             commands::fonts_list,
+            commands::recovery_list,
+            commands::recovery_restore,
+            commands::recovery_discard,
+            commands::batch_run,
             commands::ai_select_subject,
             commands::ai_remove_background,
             commands::ai_inpaint,

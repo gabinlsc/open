@@ -10,7 +10,7 @@ import { ACTIONS } from "./actions";
 // Copie de DEFAULT_BINDINGS (crates/core/src/shortcuts.rs) : si un identifiant change côté cœur,
 // ce test échoue et rappelle de mettre à jour le registre.
 const CORE_ACTIONS = [
-  "file.new", "file.open", "file.save", "file.save_as", "file.export", "file.close",
+  "file.new", "file.open", "file.save", "file.save_as", "file.export", "file.close", "app.palette",
   "edit.undo", "edit.redo", "view.zoom_in", "view.zoom_out", "view.fit", "view.actual_size",
   "view.toggle_rulers", "view.toggle_grid", "view.toggle_guides", "view.toggle_snap",
   "layer.new", "select.all", "select.none", "select.invert", "tool.rect_select", "tool.lasso", "tool.wand", "tool.finish", "tool.cancel", "tool.brush", "tool.pencil", "tool.eraser", "tool.gradient", "tool.bucket", "tool.clone", "tool.heal", "tool.blur", "paint.swap_colors", "tab.next", "tab.prev", "tool.hand", "tool.zoom",

@@ -355,6 +355,11 @@ impl Document {
         !self.history.is_at_saved_state()
     }
 
+    /// Pour un document restauré d'une récupération : il n'existe sur aucun fichier de l'utilisateur.
+    pub fn mark_unsaved(&mut self) {
+        self.history.mark_unsaved();
+    }
+
     pub fn mark_saved(&mut self) {
         self.history.mark_saved();
     }

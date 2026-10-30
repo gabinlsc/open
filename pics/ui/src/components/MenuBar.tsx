@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { t } from "../i18n";
 import { api, type ThemeChoice } from "../api";
 import { ACTIONS, runAction, startFilter } from "../actions";
 import { prettyChord } from "../keys";
@@ -14,6 +15,7 @@ export function MenuBar() {
   const snapshot = useStore((s) => s.snapshot);
   const keymap = useStore((s) => s.keymap);
   const themeChoice = useStore((s) => s.themeChoice);
+  const lang = useStore((s) => s.lang);
   const [open, setOpen] = useState<number | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const settings = snapshot?.settings;
@@ -33,6 +35,7 @@ export function MenuBar() {
         { action: "file.new" },
         { action: "file.open" },
         { action: "file.import_svg" },
+        { action: "file.batch" },
         { sep: true },
         { action: "file.save" },
         { action: "file.save_as" },
@@ -41,7 +44,7 @@ export function MenuBar() {
         { action: "file.close" },
       ],
     },
-    { label: "Édition", items: [{ action: "edit.undo" }, { action: "edit.redo" }, { sep: true }, { action: "edit.shortcuts" }] },
+    { label: "Édition", items: [{ action: "edit.undo" }, { action: "edit.redo" }, { sep: true }, { action: "app.palette" }, { action: "edit.shortcuts" }] },
     {
       label: "Calque",
       items: [
@@ -86,6 +89,10 @@ export function MenuBar() {
         { action: "view.toggle_grid", checked: settings?.showGrid },
         { action: "view.toggle_snap", checked: settings?.snapEnabled },
         { action: "view.clear_guides" },
+        { sep: true },
+        { sep: true },
+        { label: t("Langue : français"), onSelect: () => useStore.getState().setLang("fr"), checked: lang === "fr" },
+        { label: t("Langue : anglais"), onSelect: () => useStore.getState().setLang("en"), checked: lang === "en" },
         { sep: true },
         { label: "Thème : système", onSelect: () => chooseTheme("system"), checked: themeChoice === "system" },
         { label: "Thème : clair", onSelect: () => chooseTheme("light"), checked: themeChoice === "light" },
@@ -141,15 +148,15 @@ export function MenuBar() {
             onClick={() => setOpen(open === i ? null : i)}
             onMouseEnter={() => open !== null && setOpen(i)}
           >
-            {menu.label}
+            {t(menu.label)}
           </button>
           {open === i && (
-            <div className="dropdown" role="menu" aria-label={menu.label}>
+            <div className="dropdown" role="menu" aria-label={t(menu.label)}>
               {menu.items.map((item, k) => {
                 if ("sep" in item) return <hr key={k} role="separator" />;
                 const isAction = "action" in item;
                 const def = isAction ? ACTIONS[item.action] : undefined;
-                const label = isAction ? (def?.label ?? item.action) : item.label;
+                const label = t(isAction ? (def?.label ?? item.action) : item.label);
                 const disabled = isAction ? def?.enabled?.() === false : false;
                 const chord = isAction ? keymap[item.action]?.[0] : undefined;
                 const checked = item.checked;

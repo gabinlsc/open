@@ -59,6 +59,11 @@ impl History {
         self.redo.push(cmd);
     }
 
+    /// Aucun état n'est « enregistré » : le document est toujours considéré comme modifié.
+    pub(crate) fn mark_unsaved(&mut self) {
+        self.saved_at = None;
+    }
+
     pub(crate) fn mark_saved(&mut self) {
         self.saved_at = Some(self.undo.len());
     }

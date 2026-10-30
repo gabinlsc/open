@@ -1,6 +1,6 @@
-# OpenPics — Architecture (v0, à valider avant tout code)
+# OpenPics — Architecture
 
-Statut : proposition. Aucun code applicatif n'existe. Les signatures ci-dessous décrivent le design, pas l'implémentation.
+Statut : **validée** (licence GPLv3, canvas natif en fenêtre enfant — option A du §11). Les signatures ci-dessous décrivent le design ; l'état d'avancement par phase est dans `PHASE1.md` et ses suivants.
 
 ## 0. Licence
 
@@ -139,9 +139,9 @@ Cible : gaussien 24 Mpx < 150 ms sur GPU dédié (séparable, mémoire partagée
 - CI GitHub Actions : `fmt`, `clippy -D warnings`, `cargo test`, `cargo deny`, build de l'installeur Windows avec étape de signature en variable factice. GPU en CI : `wgpu` avec adaptateur logiciel (lavapipe/WARP) pour les golden images.
 - Accessibilité : navigation clavier complète, contrastes AA, rôles ARIA sur les panneaux. Télémétrie : aucune, et aucune requête réseau hors téléchargement de modèles IA explicitement demandé.
 
-## 9. Sites et déploiement
+## 9. Distribution
 
-`site/` contient la suite (`open.glsc.fr`) et `site/pics/` la page de téléchargement du module ; `deploy/deploy-site.sh` (rsync/SSH) publie le site, `deploy/publish-release.sh` publie les binaires et `releases.json` (empreintes SHA-256). La page n'affiche aucun lien tant qu'aucune version n'existe.
+OpenPics est un logiciel à télécharger depuis `open.glsc.fr`. Le dossier `site/` contient de simples pages statiques (accueil de la suite, page de téléchargement par module) que l'on dépose telles quelles sur le serveur ; aucun script de déploiement n'est fourni. La page de téléchargement lit `releases.json` (versions, tailles, SHA-256) déposé à côté des binaires et n'affiche aucun lien tant qu'il n'existe pas.
 
 ## 10. Réalisme : points durs, dits franchement
 
@@ -153,15 +153,15 @@ Cible : gaussien 24 Mpx < 150 ms sur GPU dédié (séparable, mémoire partagée
 - **Pinceau < 16 ms** : atteignable seulement si l'entrée stylet et le tracé évitent le webview (voir §11).
 - **Ordre des dépendances** : la phase 1 doit prouver, avant d'aller plus loin, le canvas natif, l'historique par tuiles et le zoom 60 fps sur un 100 Mpx.
 
-## 11. Question unique (avant de coder)
+## 11. Décision : canvas wgpu et interface web
 
-**Comment le canvas wgpu cohabite-t-il avec l'interface web ?**
+**Retenu : option A.** Comment le canvas wgpu cohabite-t-il avec l'interface web ? Les deux options étudiées :
 
 - **A — Fenêtre enfant native (recommandé)** : le cœur crée un HWND enfant avec sa swapchain wgpu, positionné sur la zone du canvas ; le webview affiche le reste. Latence minimale, entrées souris/stylet reçues nativement (`WM_POINTER`, pression Windows Ink). Contrainte : aucun élément HTML ne peut recouvrir la zone du canvas (menus déroulants, infobulles) ; le curseur d'outil, la sélection, les guides et les poignées sont dessinés par le GPU.
 - **B — Rendu vers texture puis flux de frames vers le webview** : plus simple pour la superposition HTML, mais copie CPU ou `SharedArrayBuffer` à chaque image, latence plus élevée, et les entrées stylet passent par le webview : l'objectif < 16 ms du pinceau devient incertain.
 
-Ma recommandation par défaut est **A**. Sans autre indication, je pars sur A.
+Décision du 30/10/2026 : **A** (fenêtre enfant native).
 
 ## 12. Prochaine étape
 
-Après votre validation : Phase 1 (workspace Cargo, `core` avec tuiles et historique et leurs tests, prototype du canvas natif, ouverture/enregistrement PNG/JPEG, UI de base), avec ses livrables et critères d'acceptation.
+Phase 1 livrée : voir `PHASE1.md`.

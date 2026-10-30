@@ -2,6 +2,8 @@
 //! `TileGrid` qui partage ses tuiles inchangées avec l'ancienne ; l'appelant en déduit la
 //! commande d'historique (`ReplaceTiles::between`).
 
+pub mod transform;
+
 use std::sync::Arc;
 
 use openpics_core::CoreError;
@@ -37,13 +39,49 @@ impl Op {
 
 /// Applique `op` au calque et l'enregistre dans l'historique. Renvoie `false` si rien n'a changé.
 pub fn apply_to_layer(doc: &mut Document, layer: LayerId, op: Op) -> Result<bool, CoreError> {
-    let old = &doc.layer(layer)?.pixels;
+    let target = doc.layer(layer)?;
+    if target.locks.blocks_painting() {
+        return Err(CoreError::LayerLocked(target.name.clone()));
+    }
+    let old = &target.pixels;
     let new = op.run(old)?;
     let Some(cmd) = ReplaceTiles::between(op.label(), layer, old, &new) else {
         return Ok(false);
     };
     doc.execute(Box::new(cmd))?;
     Ok(true)
+}
+
+fn record(doc: &mut Document, layer: LayerId, name: &str, new: TileGrid) -> Result<bool, CoreError> {
+    let Some(cmd) = ReplaceTiles::between(name, layer, &doc.layer(layer)?.pixels, &new) else { return Ok(false) };
+    doc.execute(Box::new(cmd))?;
+    Ok(true)
+}
+
+fn check_movable(doc: &Document, layer: LayerId) -> Result<(), CoreError> {
+    let l = doc.layer(layer)?;
+    if l.locks.blocks_moving() { Err(CoreError::LayerLocked(l.name.clone())) } else { Ok(()) }
+}
+
+/// Transforme les pixels d'un calque (échelle, rotation, perspective…) : annulable, refusé si la
+/// position du calque est verrouillée.
+pub fn apply_transform(doc: &mut Document, layer: LayerId, m: &transform::Matrix3) -> Result<bool, CoreError> {
+    check_movable(doc, layer)?;
+    let new = transform::transform(&doc.layer(layer)?.pixels, m)?;
+    record(doc, layer, "Transformation", new)
+}
+
+/// Déformation par grille d'un calque (voir `transform::warp`).
+pub fn apply_warp(
+    doc: &mut Document,
+    layer: LayerId,
+    cols: usize,
+    rows: usize,
+    offsets: &[(f64, f64)],
+) -> Result<bool, CoreError> {
+    check_movable(doc, layer)?;
+    let new = transform::warp(&doc.layer(layer)?.pixels, cols, rows, offsets)?;
+    record(doc, layer, "Déformation", new)
 }
 
 /// Retournement : chaque tuile de destination lit au plus deux tuiles source par ligne ; un petit
@@ -174,6 +212,22 @@ mod tests {
     }
 
     #[test]
+    fn locked_layers_refuse_pixel_operations() {
+        let mut doc = Document::new(DocId(1), "t", Size::new(8, 8)).unwrap();
+        let layer = doc.layers[0].id;
+        doc.layers[0].pixels.put_pixel(0, 0, [1, 2, 3, 255]);
+        for lock in [|l: &mut openpics_core::Locks| l.pixels = true, |l: &mut openpics_core::Locks| l.all = true] {
+            lock(&mut doc.layers[0].locks);
+            assert!(matches!(apply_to_layer(&mut doc, layer, Op::Invert), Err(CoreError::LayerLocked(_))));
+            doc.layers[0].locks = openpics_core::Locks::default();
+        }
+        // Le verrou de position n'empêche pas de peindre.
+        doc.layers[0].locks.position = true;
+        assert!(apply_to_layer(&mut doc, layer, Op::Invert).unwrap());
+        assert_eq!(doc.layers[0].pixels.get_pixel(0, 0), [254, 253, 252, 255]);
+    }
+
+    #[test]
     fn apply_to_layer_is_undoable_and_skips_noops() {
         let mut doc = Document::new(DocId(1), "t", Size::new(64, 64)).unwrap();
         let layer = doc.layers[0].id;
@@ -186,5 +240,26 @@ mod tests {
         doc.undo().unwrap();
         assert_eq!(doc.layers[0].pixels.get_pixel(0, 0), [10, 20, 30, 255]);
         assert_eq!(doc.layers[0].pixels.get_pixel(63, 0), [0; 4]);
+    }
+
+    #[test]
+    fn transform_command_is_undoable_and_respects_the_position_lock() {
+        use crate::transform::Matrix3;
+        let mut doc = Document::new(DocId(1), "t", Size::new(64, 64)).unwrap();
+        let layer = doc.layers[0].id;
+        doc.layers[0].pixels.put_pixel(10, 10, [9, 9, 9, 255]);
+        assert!(apply_transform(&mut doc, layer, &Matrix3::translate(5.0, 0.0)).unwrap());
+        assert_eq!(doc.layers[0].pixels.get_pixel(15, 10), [9, 9, 9, 255]);
+        doc.undo().unwrap();
+        assert_eq!(doc.layers[0].pixels.get_pixel(10, 10), [9, 9, 9, 255]);
+        doc.layers[0].locks.position = true;
+        assert!(matches!(
+            apply_transform(&mut doc, layer, &Matrix3::translate(1.0, 1.0)),
+            Err(CoreError::LayerLocked(_))
+        ));
+        assert!(matches!(apply_warp(&mut doc, layer, 2, 2, &[(0.0, 0.0); 4]), Err(CoreError::LayerLocked(_))));
+        // Verrouiller les pixels n'interdit pas de déplacer ; l'inverse non plus.
+        doc.layers[0].locks = openpics_core::Locks { pixels: true, ..Default::default() };
+        assert!(apply_transform(&mut doc, layer, &Matrix3::translate(1.0, 0.0)).is_ok());
     }
 }

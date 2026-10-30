@@ -8,8 +8,8 @@ use tauri::State;
 
 use super::Shared;
 use crate::dto::{
-    AppStatus, AxisDto, CanvasRect, GuideDrag, ImageOp, KeymapDto, OpenResult, ResolvedTheme, SettingsDto, Snapshot,
-    ThemeChoice, Tool,
+    AppStatus, AxisDto, CanvasRect, GuideDrag, ImageOp, KeymapDto, LayerPropsDto, OpenResult, ResolvedTheme,
+    SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, TransformDto,
 };
 use crate::error::{ApiError, SessionError};
 use crate::session::Session;
@@ -175,6 +175,57 @@ pub fn guide_remove(shared: State<'_, Shared>, id: u64) -> ApiResult<Snapshot> {
 #[tauri::command]
 pub fn guides_clear(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
     mutate(&shared, Session::guides_clear)
+}
+
+#[tauri::command]
+pub fn layer_select(shared: State<'_, Shared>, id: u64) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.layer_select(id))
+}
+
+#[tauri::command]
+pub fn layer_add(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.layer_add().map(|_| ()))
+}
+
+#[tauri::command]
+pub fn layer_remove(shared: State<'_, Shared>, id: u64) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.layer_remove(id))
+}
+
+#[tauri::command]
+pub fn layer_move(shared: State<'_, Shared>, id: u64, to: usize) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.layer_move(id, to))
+}
+
+#[tauri::command]
+pub fn layer_set_props(shared: State<'_, Shared>, id: u64, props: LayerPropsDto) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.layer_set_props(id, &props))
+}
+
+#[tauri::command]
+pub fn layer_set_styles(shared: State<'_, Shared>, id: u64, styles: Vec<StyleDto>) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.layer_set_styles(id, &styles))
+}
+
+#[tauri::command]
+pub async fn layer_transform(shared: State<'_, Shared>, transform: TransformDto) -> ApiResult<Snapshot> {
+    // `async` : le rééchantillonnage d'un grand calque ne doit pas figer le thread principal.
+    mutate(&shared, |s| s.layer_transform(&transform).map(|_| ()))
+}
+
+#[tauri::command]
+pub fn mask_add(shared: State<'_, Shared>, id: u64, reveal: bool) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.mask_add(id, reveal))
+}
+
+#[tauri::command]
+pub fn mask_remove(shared: State<'_, Shared>, id: u64) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.mask_remove(id))
+}
+
+#[tauri::command]
+pub fn mask_set_enabled(shared: State<'_, Shared>, id: u64, enabled: bool) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.mask_set_enabled(id, enabled))
 }
 
 #[tauri::command]

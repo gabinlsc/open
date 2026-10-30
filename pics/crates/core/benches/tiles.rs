@@ -1,3 +1,6 @@
+// Code de mesure, pas de production : une panne de préparation doit arrêter le benchmark net.
+#![allow(clippy::unwrap_used)]
+
 use criterion::{Criterion, criterion_group, criterion_main};
 use openpics_core::TileGrid;
 use std::hint::black_box;

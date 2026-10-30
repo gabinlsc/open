@@ -83,9 +83,16 @@ struct LineVertex {
     color: [f32; 4],
 }
 
+/// Ce qui a produit la texture : sert à savoir si elle est encore à jour.
+enum Source {
+    /// Tuile d'un calque unique : une tuile modifiée est une autre `Arc`.
+    Tile(Arc<Tile>),
+    /// Tuile composée par le CPU : valable tant que la révision du document ne change pas.
+    Revision(u64),
+}
+
 struct CachedTile {
-    /// Gardée pour détecter une modification : une tuile modifiée est une autre `Arc`.
-    source: Arc<Tile>,
+    source: Source,
     bind_group: wgpu::BindGroup,
     last_used: u64,
 }
@@ -487,7 +494,33 @@ impl Renderer {
                     .push(Instance { rect: [tl.x as f32, tl.y as f32, br.x as f32, br.y as f32], color: [0.0; 4] });
                 draws.push(Draw::Checker);
                 let visible = frame.viewport.visible_doc_rect(openpics_core::Size::new(size.0, size.1));
-                for layer in doc.layers.iter().filter(|l| l.visible) {
+                let plain = is_plain(doc);
+                if !plain {
+                    // Modes de fusion, opacité, masques, écrêtage : compositeur de référence (CPU), une
+                    // tuile composée à la fois, recalculée seulement quand le document change.
+                    let ts = f64::from(TILE_SIZE);
+                    let sample = doc.layers.first().map(|l| &l.pixels);
+                    for key in sample.map(|g| g.keys_in_rect(visible)).unwrap_or_default() {
+                        if !openpics_core::composite::tile_has_content(doc, key) {
+                            continue;
+                        }
+                        let a = frame
+                            .viewport
+                            .doc_to_screen(openpics_core::Vec2::new(f64::from(key.tx) * ts, f64::from(key.ty) * ts));
+                        let b = frame.viewport.doc_to_screen(openpics_core::Vec2::new(
+                            f64::from(key.tx + 1) * ts,
+                            f64::from(key.ty + 1) * ts,
+                        ));
+                        let ck = (doc.id, LayerId(0), key);
+                        self.ensure_composed(ck, doc, key);
+                        instances.push(Instance {
+                            rect: [a.x.round() as f32, a.y.round() as f32, b.x.round() as f32, b.y.round() as f32],
+                            color: [0.0; 4],
+                        });
+                        draws.push(Draw::Tile(ck));
+                    }
+                }
+                for layer in doc.layers.iter().filter(|l| l.visible && plain) {
                     for key in layer.pixels.keys_in_rect(visible) {
                         let Some(tile) = layer.pixels.tile(key) else {
                             continue;
@@ -613,7 +646,7 @@ impl Renderer {
     /// Téléverse la tuile si elle est absente ou si le document en a changé le contenu.
     fn ensure_tile(&mut self, key: CacheKey, tile: &Arc<Tile>) {
         if let Some(entry) = self.cache.get_mut(&key) {
-            if Arc::ptr_eq(&entry.source, tile) {
+            if matches!(&entry.source, Source::Tile(t) if Arc::ptr_eq(t, tile)) {
                 entry.last_used = self.frame;
                 return;
             }
@@ -646,7 +679,47 @@ impl Renderer {
             layout: &self.tile_layout,
             entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) }],
         });
-        self.cache.insert(key, CachedTile { source: tile.clone(), bind_group, last_used: self.frame });
+        self.cache.insert(key, CachedTile { source: Source::Tile(tile.clone()), bind_group, last_used: self.frame });
+    }
+
+    /// Compose une tuile avec le compositeur de référence et la téléverse.
+    fn ensure_composed(&mut self, key: CacheKey, doc: &Document, tile: TileKey) {
+        if let Some(entry) = self.cache.get_mut(&key) {
+            if matches!(entry.source, Source::Revision(r) if r == doc.revision()) {
+                entry.last_used = self.frame;
+                return;
+            }
+        }
+        let composed = openpics_core::composite::composite_tile(doc, tile);
+        let bytes: Vec<u8> = composed.iter().flat_map(|p| p.map(|c| (c.clamp(0.0, 1.0) * 255.0 + 0.5) as u8)).collect();
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("tile composée"),
+            size: wgpu::Extent3d { width: TILE_SIZE, height: TILE_SIZE, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        self.queue.write_texture(
+            texture.as_image_copy(),
+            &bytes,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(TILE_SIZE * 4),
+                rows_per_image: Some(TILE_SIZE),
+            },
+            wgpu::Extent3d { width: TILE_SIZE, height: TILE_SIZE, depth_or_array_layers: 1 },
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("tile composée"),
+            layout: &self.tile_layout,
+            entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) }],
+        });
+        self.cache
+            .insert(key, CachedTile { source: Source::Revision(doc.revision()), bind_group, last_used: self.frame });
     }
 
     /// Retire les tuiles les moins récemment vues quand le cache dépasse son plafond.
@@ -660,6 +733,22 @@ impl Renderer {
         for (_, key) in by_age.into_iter().take(self.cache.len() - cap) {
             self.cache.remove(&key);
         }
+    }
+}
+
+/// Un seul calque visible tel quel (normal, 100 %, sans masque) : ses tuiles se dessinent directement.
+fn is_plain(doc: &Document) -> bool {
+    match doc.layers.as_slice() {
+        [l] => {
+            l.visible
+                && l.opacity >= 1.0
+                && l.fill >= 1.0
+                && l.blend == openpics_core::BlendMode::Normal
+                && l.mask.is_none()
+                && !l.clip_to_below
+                && l.styles.is_empty()
+        }
+        _ => false,
     }
 }
 
@@ -913,6 +1002,33 @@ mod tests {
         doc.layers[0].pixels.put_pixel(1, 1, [0, 255, 0, 255]);
         let b = r.render_to_rgba8(&frame(&doc), (300, 300)).unwrap();
         assert_eq!(pixel(&b, 300, 6, 6), [0, 255, 0, 255]);
+    }
+
+    #[test]
+    fn layers_with_blend_modes_are_composited_on_screen() {
+        let Some(mut r) = headless() else { return };
+        let mut doc = Document::new(DocId(1), "t", Size::new(64, 64)).unwrap();
+        doc.layers[0].pixels.put_pixel(2, 2, [51, 128, 204, 255]);
+        let mut top = openpics_core::TileGrid::new(64, 64).unwrap();
+        top.put_pixel(2, 2, [153, 77, 230, 255]);
+        let id = doc.add_layer("haut", top);
+        doc.layer_mut(id).unwrap().blend = openpics_core::BlendMode::Multiply;
+        let frame = FrameParams {
+            document: Some(&doc),
+            viewport: Viewport { zoom: 4.0, origin: Vec2::default() },
+            settings: ViewSettings { show_grid: false, show_guides: false, ..ViewSettings::default() },
+            theme: Theme::Light,
+            preview_guide: None,
+        };
+        let a = r.render_to_rgba8(&frame, (300, 300)).unwrap();
+        assert_eq!(pixel(&a, 300, 10, 10), [31, 39, 184, 255], "produit attendu, pas le dernier calque tel quel");
+        // Une modification suivante doit être revue (cache invalidé par la révision).
+        let mut doc2 = doc.render_snapshot();
+        doc2.layer_mut(id).unwrap().blend = openpics_core::BlendMode::Normal;
+        doc2.touch();
+        let frame2 = FrameParams { document: Some(&doc2), ..frame };
+        let b = r.render_to_rgba8(&frame2, (300, 300)).unwrap();
+        assert_eq!(pixel(&b, 300, 10, 10), [153, 77, 230, 255]);
     }
 
     #[test]

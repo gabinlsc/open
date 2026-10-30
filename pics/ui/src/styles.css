@@ -139,3 +139,32 @@ input[aria-invalid="true"] { border-color: var(--danger); }
 @media (prefers-reduced-motion: no-preference) { .dropdown, .modal { animation: pop 0.12s ease-out; } }
 @keyframes pop { from { opacity: 0; transform: translateY(-4px); } }
 .statusbar select { padding: 1px 6px; }
+
+/* Panneau Calques */
+.layers { list-style: none; margin: 0 0 8px; padding: 0; max-height: 220px; overflow-y: auto; }
+.layer { display: flex; align-items: center; border-radius: 8px; }
+.layer.active { background: var(--accent-pale); }
+.layer .eye { border: 0; background: none; cursor: pointer; width: 26px; color: var(--muted); }
+.layer-name { flex: 1; text-align: left; border: 0; background: none; padding: 5px 4px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge { margin-left: 6px; font-size: 10px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--on-accent); }
+.badge.off { background: var(--line); color: var(--muted); }
+.row.wrap { flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.layer-props { display: grid; gap: 8px; margin-top: 8px; }
+.field { display: grid; gap: 2px; font-weight: 500; }
+.percent { display: grid; grid-template-columns: 90px 1fr 46px; align-items: center; gap: 6px; font-weight: 500; }
+.percent input { padding: 0; } .percent output { text-align: right; color: var(--muted); }
+.checks { border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 4px; padding: 6px 8px; margin: 0; }
+.checks legend { padding: 0 4px; font-weight: 500; }
+.sidebar { overflow-y: auto; }
+.sidebar section, .layer-props, .field, .checks { min-width: 0; }
+.field input, .field select { width: 100%; min-width: 0; }
+.percent { grid-template-columns: 84px minmax(0, 1fr) 44px; }
+.percent input { width: 100%; min-width: 0; }
+
+.style-row { display: grid; gap: 4px; }
+.style-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; padding: 0 0 6px 22px; }
+.num { display: grid; gap: 1px; font-size: 12px; color: var(--muted); min-width: 0; }
+.num.wide { grid-column: 1 / -1; }
+.num input, .num select { width: 100%; min-width: 0; color: var(--ink); }
+.num input[type="color"] { padding: 0; height: 26px; }
+.form label.inline { display: flex; align-items: center; gap: 6px; font-weight: 400; }

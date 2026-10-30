@@ -9,6 +9,16 @@ pub enum CoreError {
     BufferSize { width: u32, height: u32, expected: usize, actual: usize },
     #[error("calque introuvable : {0}")]
     LayerNotFound(u64),
+    #[error("le calque « {0} » est verrouillé")]
+    LayerLocked(String),
+    #[error("le calque {0} n'a pas de masque")]
+    NoMask(u64),
+    #[error("le calque {0} a déjà un masque")]
+    HasMask(u64),
+    #[error("position de calque invalide : {index} (le document a {len} calques)")]
+    LayerIndex { index: usize, len: usize },
+    #[error("transformation invalide : {0}")]
+    InvalidTransform(String),
     #[error("repère introuvable : {0}")]
     GuideNotFound(u64),
     #[error("raccourci invalide « {0} »")]

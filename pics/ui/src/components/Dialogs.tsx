@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import { api, CommandError } from "../api";
+import { api, CommandError, type TransformDto } from "../api";
+import { parseNumber } from "../styles";
 import { ACTIONS } from "../actions";
 import { chordFromEvent, prettyChord } from "../keys";
 import { activeDoc, errorText, useStore } from "../store";
@@ -207,6 +208,44 @@ export function ShortcutsDialog() {
   );
 }
 
+/** Transformation libre : échelle, rotation et déplacement autour du centre du document. */
+export function TransformDialog() {
+  const close = () => useStore.getState().setDialog(null);
+  const [v, setV] = useState({ scaleX: "100", scaleY: "100", rotationDeg: "0", translateX: "0", translateY: "0" });
+  const [linked, setLinked] = useState(true);
+  const set = (key: keyof typeof v, value: string) =>
+    setV((p) => (linked && (key === "scaleX" || key === "scaleY") ? { ...p, scaleX: value, scaleY: value } : { ...p, [key]: value }));
+  const t: TransformDto = {
+    scaleX: parseNumber(v.scaleX, 100, 1, 1000),
+    scaleY: parseNumber(v.scaleY, 100, 1, 1000),
+    rotationDeg: parseNumber(v.rotationDeg, 0, -360, 360),
+    translateX: parseNumber(v.translateX, 0, -100000, 100000),
+    translateY: parseNumber(v.translateY, 0, -100000, 100000),
+  };
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (await useStore.getState().run(() => api.layerTransform(t))) close();
+  };
+  const field = (key: keyof typeof v, label: string) => (
+    <label>{label}<input inputMode="decimal" value={v[key]} onChange={(e) => set(key, e.target.value)} /></label>
+  );
+  return (
+    <Modal title="Transformer le calque" onClose={close}>
+      <form onSubmit={submit} className="form">
+        <div className="row">{field("scaleX", "Largeur (%)")}{field("scaleY", "Hauteur (%)")}</div>
+        <label className="inline"><input type="checkbox" checked={linked} onChange={(e) => setLinked(e.target.checked)} /> Conserver les proportions</label>
+        {field("rotationDeg", "Rotation (° sens horaire)")}
+        <div className="row">{field("translateX", "Déplacement X (px)")}{field("translateY", "Déplacement Y (px)")}</div>
+        <p className="muted">Autour du centre du document. La taille du calque ne change pas : ce qui sort du cadre est perdu (annulable).</p>
+        <div className="actions">
+          <button type="button" className="btn secondary" onClick={close}>Annuler</button>
+          <button type="submit" className="btn">Appliquer</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export function Dialogs() {
   const dialog = useStore((s) => s.dialog);
   if (!dialog) return null;
@@ -217,6 +256,8 @@ export function Dialogs() {
       return <ExportDialog />;
     case "shortcuts":
       return <ShortcutsDialog />;
+    case "transform":
+      return <TransformDialog />;
     case "confirmClose":
       return <ConfirmCloseDialog id={dialog.id} name={dialog.name} />;
   }

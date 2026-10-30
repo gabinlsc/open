@@ -38,6 +38,17 @@ export function MenuBar() {
       ],
     },
     { label: "Édition", items: [{ action: "edit.undo" }, { action: "edit.redo" }, { sep: true }, { action: "edit.shortcuts" }] },
+    {
+      label: "Calque",
+      items: [
+        { action: "layer.new" },
+        { action: "layer.delete" },
+        { action: "layer.transform" },
+        { sep: true },
+        { action: "layer.mask_reveal" },
+        { action: "layer.mask_hide" },
+      ],
+    },
     { label: "Image", items: [{ action: "image.flip_h" }, { action: "image.flip_v" }, { action: "image.invert" }] },
     {
       label: "Affichage",

@@ -111,6 +111,7 @@ pub const DEFAULT_BINDINGS: &[(&str, &[&str])] = &[
     ("view.toggle_grid", &["Ctrl+'"]),
     ("view.toggle_guides", &["Ctrl+;"]),
     ("view.toggle_snap", &["Ctrl+Shift+;"]),
+    ("layer.new", &["Ctrl+Shift+N"]),
     ("tab.next", &["Ctrl+Tab"]),
     ("tab.prev", &["Ctrl+Shift+Tab"]),
     ("tool.hand", &["H"]),

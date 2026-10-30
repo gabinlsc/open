@@ -73,6 +73,11 @@ struct LayerEntry {
     /// Présent pour un calque de réglage.
     #[serde(default)]
     adjustment: Option<AdjEntry>,
+    /// Présents pour un calque de texte ou de forme : le modèle est la source, le PNG est son rendu.
+    #[serde(default)]
+    text: Option<openpics_core::text::TextModel>,
+    #[serde(default)]
+    shape: Option<openpics_core::vector::VectorModel>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -178,6 +183,8 @@ impl LayerEntry {
                 _ => None,
             },
             adjustment: l.adjustment().map(AdjEntry::from_adjustment),
+            text: l.text().cloned(),
+            shape: l.shape().cloned(),
         }
     }
 }
@@ -237,7 +244,7 @@ pub(crate) fn write(doc: &Document, path: &Path) -> Result<(), IoError> {
     // Le PNG est déjà compressé : le re-deflater coûte du temps sans gagner d'espace.
     let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored).large_file(true);
     for layer in &doc.layers {
-        if layer.is_raster() {
+        if layer.has_pixels() {
             zip.start_file(layer_path(layer.id.0), stored)?;
             zip.write_all(&encode_png(&layer.pixels)?)?;
         }
@@ -300,6 +307,12 @@ pub(crate) fn read(path: &Path, id: DocId) -> Result<Document, IoError> {
         layer.styles = entry.styles.iter().map(LayerStyle::sanitized).collect();
         if let Some(isolated) = entry.group_isolated {
             layer.kind = LayerKind::Group { isolated };
+        }
+        if let Some(t) = entry.text.take() {
+            layer.kind = LayerKind::Text(Box::new(t.sanitized()));
+        }
+        if let Some(v) = entry.shape.take() {
+            layer.kind = LayerKind::Shape(Box::new(v.sanitized()));
         }
         if let Some(adj) = entry.adjustment.take() {
             layer.kind = LayerKind::Adjustment(Box::new(adj.into_adjustment()?));
@@ -538,6 +551,39 @@ mod tests {
         zip.finish().unwrap();
         let err = open(&q, DocId(1)).unwrap_err().to_string();
         assert!(err.contains("LUT 3D illisible"), "{err}");
+    }
+
+    #[test]
+    fn text_and_shape_layers_roundtrip_with_their_cached_pixels() {
+        use openpics_core::text::TextModel;
+        use openpics_core::vector::{Path, VectorModel};
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("vec.ocv");
+        let mut d = sample();
+        let (t, v) = (openpics_core::LayerId(d.alloc_id()), openpics_core::LayerId(d.alloc_id()));
+        let mut tp = TileGrid::new(300, 260).unwrap();
+        tp.put_pixel(5, 6, [1, 2, 3, 255]);
+        let mut tl = Layer::new(t, "Texte", tp);
+        tl.kind =
+            LayerKind::Text(Box::new(TextModel { text: "Bonjour é".into(), bold: true, ..TextModel::default() }));
+        let mut vl = Layer::new(v, "Forme", TileGrid::new(300, 260).unwrap());
+        vl.kind = LayerKind::Shape(Box::new(VectorModel {
+            paths: vec![Path::ellipse(50.0, 50.0, 20.0, 10.0)],
+            ..VectorModel::default()
+        }));
+        d.layers.push(tl);
+        d.layers.push(vl);
+        save(&mut d, &p).unwrap();
+        let back = open(&p, DocId(3)).unwrap();
+        let (bt, bv) = (back.layer(t).unwrap(), back.layer(v).unwrap());
+        assert_eq!(bt.text().map(|m| (m.text.as_str(), m.bold)), Some(("Bonjour é", true)));
+        assert_eq!(
+            bt.pixels.get_pixel(5, 6),
+            [1, 2, 3, 255],
+            "le rendu en cache est conservé : pas besoin de la police à l'ouverture"
+        );
+        assert_eq!(bv.shape().map(|s| s.paths.len()), Some(1));
+        assert!(!bt.is_raster() && bt.has_pixels());
     }
 
     #[test]

@@ -93,6 +93,12 @@ impl Session {
             },
             Tool::MagicWand => self.wand(at, p.mode())?,
             Tool::Hand | Tool::Zoom => {}
+            Tool::Text
+            | Tool::ShapeRect
+            | Tool::ShapeRoundedRect
+            | Tool::ShapeEllipse
+            | Tool::ShapeLine
+            | Tool::Pen => self.vector_down(p, at)?,
             _ => self.paint_down(p, at)?,
         }
         Ok(())
@@ -102,6 +108,9 @@ impl Session {
         let at = self.doc_point(p);
         if self.stroke.is_some() {
             return self.paint_move(p, at);
+        }
+        if self.shape_drag.is_some() || self.pen.is_some() {
+            return self.vector_move(at);
         }
         let Some(mut drag) = self.drag.take() else { return Ok(()) };
         if drag.tool == Tool::Lasso {
@@ -122,6 +131,9 @@ impl Session {
         let at = self.doc_point(p);
         if self.stroke.is_some() {
             return self.paint_up(p, at);
+        }
+        if self.shape_drag.is_some() || self.pen.is_some() {
+            return self.vector_up(at);
         }
         let Some(drag) = self.drag.take() else { return Ok(()) };
         if drag.tool == Tool::PolygonLasso {
@@ -146,6 +158,9 @@ impl Session {
 
     /// Entrée : ferme le polygone en cours.
     pub fn tool_finish(&mut self) -> Result<(), SessionError> {
+        if self.pen.is_some() {
+            return self.pen_finish(false);
+        }
         let Some(drag) = self.drag.take() else { return Ok(()) };
         self.selection_preview = None;
         if drag.tool == Tool::PolygonLasso && drag.points.len() >= 3 {
@@ -160,6 +175,7 @@ impl Session {
     /// Échap : abandonne le geste en cours sans toucher à la sélection.
     pub fn tool_cancel(&mut self) {
         self.paint_cancel();
+        self.vector_cancel();
         self.drag = None;
         self.selection_preview = None;
     }
@@ -184,7 +200,7 @@ impl Session {
     }
 
     /// Enregistre une sélection dans l'historique ; une sélection vide équivaut à « désélectionner ».
-    fn commit_selection(&mut self, name: &str, mask: TileGrid) -> Result<(), SessionError> {
+    pub(super) fn commit_selection(&mut self, name: &str, mask: TileGrid) -> Result<(), SessionError> {
         let value = selection::bounds(&mask).map(|_| mask);
         self.entry_mut()?.doc.execute(Box::new(SetSelection::new(name, value)))?;
         Ok(())

@@ -32,6 +32,7 @@ export function MenuBar() {
       items: [
         { action: "file.new" },
         { action: "file.open" },
+        { action: "file.import_svg" },
         { sep: true },
         { action: "file.save" },
         { action: "file.save_as" },
@@ -50,6 +51,7 @@ export function MenuBar() {
         { sep: true },
         { action: "layer.mask_reveal" },
         { action: "layer.mask_hide" },
+        { action: "layer.rasterize" },
         ...(hasDoc ? [{ sep: true } as Item, ...adjustmentKinds.map((k): Item => ({ label: `Réglage : ${k.label}`, onSelect: () => void useStore.getState().run(() => api.adjustmentAdd(k.id)) }))] : []),
       ],
     },

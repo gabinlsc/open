@@ -29,7 +29,7 @@ jobs:
           workspaces: pics
       # Rasteriseur Vulkan logiciel (lavapipe) : permet d'exécuter les tests de rendu sans GPU.
       - name: Pilote graphique logiciel
-        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers libvulkan1
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers libvulkan1 fonts-dejavu-core
       - run: cargo fmt --all --check
       # L'app Tauri n'est lintée ici que pour sa logique ; la coque l'est dans le job Windows.
       - run: cargo clippy --workspace --exclude openpics-app --all-targets -- -D warnings
@@ -38,7 +38,10 @@ jobs:
         run: cargo test --workspace --exclude openpics-app
         env:
           OPENPICS_REQUIRE_GPU: "1"
-      - run: cargo test -p openpics-app --no-default-features
+      - name: Tests de l'application (polices système obligatoires)
+        run: cargo test -p openpics-app --no-default-features
+        env:
+          OPENPICS_REQUIRE_FONTS: "1"
       - name: Les types TypeScript générés sont à jour
         run: git diff --exit-code -- ui/src/gen
 

@@ -62,6 +62,12 @@ pub enum Tool {
     Burn,
     Sponge,
     Liquify,
+    Text,
+    ShapeRect,
+    ShapeRoundedRect,
+    ShapeEllipse,
+    ShapeLine,
+    Pen,
 }
 
 /// Réglages des outils de sélection.
@@ -333,6 +339,8 @@ pub struct LayerDto {
     /// Imbrication (0 = niveau supérieur), pour l'indentation du panneau.
     pub depth: usize,
     pub adjustment: Option<AdjustmentDto>,
+    pub text: Option<TextDto>,
+    pub shape: Option<ShapeDto>,
 }
 
 /// Identifiant JSON d'un mode (`multiply`, `soft_light`…), identique à celui du format `.ocv`.
@@ -363,6 +371,8 @@ impl From<&Layer> for LayerDto {
             group: l.group.map(|g| g.0),
             depth: 0,
             adjustment: l.adjustment().map(AdjustmentDto::from),
+            text: l.text().map(TextDto::from),
+            shape: l.shape().map(ShapeDto::from),
         }
     }
 }
@@ -441,6 +451,21 @@ mod tests {
                 .iter()
                 .all(|f| f.params.iter().all(|p| p.value >= p.min && p.value <= p.max) && !f.category.is_empty())
         );
+    }
+
+    #[test]
+    fn text_and_shape_dtos_mirror_their_models() {
+        let t = openpics_core::text::TextModel { color: [255, 0, 128], italic: true, ..Default::default() };
+        let d = TextDto::from(&t);
+        assert_eq!((d.color.as_str(), d.italic, d.has_path, d.align), ("#ff0080", true, false, TextAlignDto::Left));
+        let v = openpics_core::vector::VectorModel { fill: Some([1, 2, 3, 128]), ..Default::default() };
+        let s = ShapeDto::from(&v);
+        assert_eq!(
+            s.fill.as_ref().map(|f| (f.color.as_str(), (f.opacity * 255.0).round() as u8)),
+            Some(("#010203", 128))
+        );
+        assert_eq!(parse_boolean_op("xor"), Some(openpics_ops::vector::BooleanOp::Xor));
+        assert_eq!(parse_boolean_op("n'importe quoi"), None);
     }
 
     #[test]
@@ -820,4 +845,118 @@ pub fn filter_infos() -> Vec<FilterInfoDto> {
                 .collect(),
         })
         .collect()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum TextAlignDto {
+    Left,
+    Center,
+    Right,
+    Justify,
+}
+
+/// Calque de texte tel que l'interface l'édite.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TextDto {
+    pub text: String,
+    pub font: String,
+    pub size: f32,
+    pub color: String,
+    pub bold: bool,
+    pub italic: bool,
+    pub align: TextAlignDto,
+    pub line_height: f32,
+    pub box_width: Option<f32>,
+    pub origin_x: f32,
+    pub origin_y: f32,
+    /// En sortie seulement : le texte suit un tracé.
+    #[serde(default)]
+    pub has_path: bool,
+}
+
+impl From<&openpics_core::text::TextModel> for TextDto {
+    fn from(t: &openpics_core::text::TextModel) -> Self {
+        use openpics_core::text::TextAlign;
+        TextDto {
+            text: t.text.clone(),
+            font: t.font.clone(),
+            size: t.size,
+            color: hex(t.color),
+            bold: t.bold,
+            italic: t.italic,
+            align: match t.align {
+                TextAlign::Left => TextAlignDto::Left,
+                TextAlign::Center => TextAlignDto::Center,
+                TextAlign::Right => TextAlignDto::Right,
+                TextAlign::Justify => TextAlignDto::Justify,
+            },
+            line_height: t.line_height,
+            box_width: t.box_width,
+            origin_x: t.origin.0,
+            origin_y: t.origin.1,
+            has_path: t.path.is_some(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ColorOpacityDto {
+    pub color: String,
+    pub opacity: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct StrokeDto {
+    pub color: String,
+    pub opacity: f32,
+    pub width: f32,
+    pub round_caps: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ShapeDto {
+    pub fill: Option<ColorOpacityDto>,
+    pub stroke: Option<StrokeDto>,
+    pub even_odd: bool,
+    /// En sortie seulement : nombre de chemins de la forme.
+    #[serde(default)]
+    pub path_count: usize,
+}
+
+impl From<&openpics_core::vector::VectorModel> for ShapeDto {
+    fn from(v: &openpics_core::vector::VectorModel) -> Self {
+        let co = |c: [u8; 4]| ColorOpacityDto { color: hex([c[0], c[1], c[2]]), opacity: f32::from(c[3]) / 255.0 };
+        ShapeDto {
+            fill: v.fill.map(co),
+            stroke: v.stroke.map(|s| StrokeDto {
+                color: hex([s.color[0], s.color[1], s.color[2]]),
+                opacity: f32::from(s.color[3]) / 255.0,
+                width: s.width,
+                round_caps: s.round_caps,
+            }),
+            even_odd: v.fill_rule == openpics_core::vector::FillRule::EvenOdd,
+            path_count: v.paths.len(),
+        }
+    }
+}
+
+pub fn parse_boolean_op(id: &str) -> Option<openpics_ops::vector::BooleanOp> {
+    use openpics_ops::vector::BooleanOp;
+    Some(match id {
+        "union" => BooleanOp::Union,
+        "intersect" => BooleanOp::Intersect,
+        "subtract" => BooleanOp::Subtract,
+        "xor" => BooleanOp::Xor,
+        _ => return None,
+    })
 }

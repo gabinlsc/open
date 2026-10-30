@@ -43,6 +43,7 @@ struct DocEntry {
 mod filters;
 mod paint;
 mod tools;
+mod vector;
 pub use tools::Pointer;
 
 pub struct Session {
@@ -59,6 +60,8 @@ pub struct Session {
     paint: crate::dto::PaintOptionsDto,
     stroke: Option<paint::ActiveStroke>,
     filter_preview: Option<filters::FilterPreview>,
+    pen: Option<vector::PenState>,
+    shape_drag: Option<((f64, f64), bool)>,
     /// Source du tampon et du correcteur (Alt + clic) et décalage source − destination une fois fixé.
     clone_source: Option<(f64, f64)>,
     clone_offset: Option<(f32, f32)>,
@@ -95,6 +98,8 @@ impl Session {
             paint: crate::dto::PaintOptionsDto::default(),
             stroke: None,
             filter_preview: None,
+            pen: None,
+            shape_drag: None,
             clone_source: None,
             clone_offset: None,
             selection_preview: None,

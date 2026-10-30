@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pics — éditeur d'images libre pour Windows</title>
+<meta name="description" content="Télécharger OpenPics, l'éditeur d'images libre et gratuit pour Windows 10 et 11. Installeur et version portable.">
+<link rel="icon" href="../assets/brand/openpics-monogramme.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a href="../" aria-label="Open, accueil"><img class="logo-light" src="../assets/brand/openpics-logo.svg" alt="" height="32"><img class="logo-dark" src="../assets/brand/openpics-logo-fond-sombre.svg" alt="" height="32"></a>
+  <nav aria-label="Principal"><a href="../">Tous les modules</a><a href="https://studio.glsc.fr">StudioGLSC</a></nav>
+</div></header>
+<main class="wrap">
+  <div class="hero">
+    <span class="pill">Module Pics</span>
+    <h1>OpenPics, l'éditeur d'images libre.</h1>
+    <p>Calques, sélections, retouche et filtres, pour Windows 10 et 11 (x64). Tout se passe sur votre machine : pas de compte, pas de télémétrie.</p>
+  </div>
+
+  <section aria-labelledby="t-dl">
+    <h2 id="t-dl">Télécharger <small class="muted" style="font-weight:400">version <span id="version">—</span></small></h2>
+    <ul class="dl" id="downloads">
+      <li>
+        <div><strong>Aucune version publiée pour l'instant</strong><br><small>Le développement est en cours (phase d'architecture). Les liens apparaîtront ici dès la première version.</small></div>
+        <a class="btn" href="#" aria-disabled="true" tabindex="-1">Bientôt</a>
+      </li>
+    </ul>
+    <noscript><p class="muted">Activez JavaScript pour afficher les liens de la dernière version, ou consultez <a href="releases.json">releases.json</a>.</p></noscript>
+  </section>
+
+  <section id="sums-wrap" hidden aria-labelledby="t-sum">
+    <h2 id="t-sum">Vérifier le téléchargement</h2>
+    <p class="muted">Comparez l'empreinte SHA-256 avec la commande <code>Get-FileHash fichier -Algorithm SHA256</code> dans PowerShell.</p>
+    <table><thead><tr><th>Fichier</th><th>SHA-256</th></tr></thead><tbody id="sums"></tbody></table>
+  </section>
+
+  <section aria-labelledby="t-cfg">
+    <h2 id="t-cfg">Configuration</h2>
+    <ul>
+      <li>Windows 10 ou 11, 64 bits.</li>
+      <li>Carte graphique compatible DirectX 12 ou Vulkan recommandée (repli processeur sinon).</li>
+      <li><strong>Installeur</strong> : s'installe pour l'utilisateur. <strong>Portable</strong> : un dossier à décompresser, rien n'est écrit ailleurs.</li>
+    </ul>
+    <p class="note">Les premières versions ne seront pas signées : Windows SmartScreen peut afficher un avertissement. Vérifiez l'empreinte ci-dessus avant de lancer le fichier.</p>
+  </section>
+</main>
+<footer><div class="wrap">Open est un projet de <a href="https://studio.glsc.fr">StudioGLSC</a>.</div></footer>
+<script src="../assets/releases.js"></script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+/* Palette et rayons issus du kit de marque StudioGLSC. */
+@font-face{font-family:Inter;font-weight:400;font-display:swap;src:url(fonts/inter-400.woff2) format("woff2")}
+@font-face{font-family:Inter;font-weight:500;font-display:swap;src:url(fonts/inter-500.woff2) format("woff2")}
+@font-face{font-family:Inter;font-weight:600;font-display:swap;src:url(fonts/inter-600.woff2) format("woff2")}
+@font-face{font-family:"Inter Display";font-weight:700;font-display:swap;src:url(fonts/inter-display-700.woff2) format("woff2")}
+:root{--blue:#2447D6;--blue-deep:#1B37B0;--blue-pale:#E9EEFE;--ink:#0B1220;--grey:#566074;--line:#E1E5ED;--bg:#F6F7F9;--surface:#FFFFFF;--ok:#107A57;--night:#0A0F1C;
+--r1:10px;--r2:16px;--r3:24px;--shadow:0 1px 2px rgba(11,18,32,.05),0 8px 24px rgba(11,18,32,.06);--text:var(--ink);--muted:var(--grey)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:var(--night);--surface:#121A2E;--line:#222C45;--text:#F6F7F9;--muted:#A3ADC2;--blue-pale:#16224A}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:400 1rem/1.6 Inter,system-ui,sans-serif}
+h1,h2,h3{font-family:"Inter Display",Inter,sans-serif;font-weight:700;line-height:1.15;margin:0 0 .5em}
+h1{font-size:clamp(2rem,5vw,3.25rem)}h2{font-size:1.5rem}h3{font-size:1.15rem}
+a{color:var(--blue)}a:hover{color:var(--blue-deep)}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:4px}
+.wrap{max-width:68rem;margin:0 auto;padding:0 1.25rem}
+header.top{border-bottom:1px solid var(--line);background:var(--surface)}
+header.top .wrap{display:flex;align-items:center;justify-content:space-between;height:4.25rem;gap:1rem}
+header.top img{height:2rem;width:auto;display:block}
+header.top .logo-dark{display:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) header.top .logo-light{display:none}:root:not([data-theme=light]) header.top .logo-dark{display:block}}
+nav a{margin-left:1.25rem;color:var(--muted);text-decoration:none;font-weight:500}nav a:hover{color:var(--blue)}
+.hero{padding:4rem 0 2.5rem}.hero p{max-width:40rem;color:var(--muted);font-size:1.15rem}
+.pill{display:inline-block;background:var(--blue-pale);color:var(--blue);font-weight:600;font-size:.85rem;padding:.2rem .75rem;border-radius:999px}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .pill{color:#B7C5FA}}
+.pill.ok{background:#E3F4EC;color:var(--ok)}
+.btn{display:inline-flex;align-items:center;gap:.5rem;background:var(--blue);color:#fff;border:0;border-radius:var(--r1);padding:.75rem 1.25rem;font:600 1rem Inter,sans-serif;text-decoration:none;cursor:pointer}
+.btn:hover{background:var(--blue-deep);color:#fff}
+.btn.sec{background:transparent;color:var(--blue);box-shadow:inset 0 0 0 1.5px var(--blue)}.btn.sec:hover{background:var(--blue-pale);color:var(--blue-deep)}
+.btn[aria-disabled=true]{opacity:.55;pointer-events:none}
+.grid{display:grid;gap:1.25rem;grid-template-columns:repeat(auto-fill,minmax(17rem,1fr));margin:1.5rem 0 4rem}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r2);padding:1.5rem;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:.75rem}
+.card img.mono{width:3rem;height:3rem}.card p{margin:0;color:var(--muted)}.card .actions{margin-top:auto;display:flex;gap:.75rem;flex-wrap:wrap}
+.card.soon{box-shadow:none;background:transparent;border-style:dashed}
+.dl{list-style:none;margin:1.5rem 0;padding:0;display:grid;gap:1rem}
+.dl li{background:var(--surface);border:1px solid var(--line);border-radius:var(--r2);padding:1.25rem 1.5rem;display:flex;gap:1rem;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.dl small,.muted{color:var(--muted)}code{font:500 .85em ui-monospace,Consolas,monospace;background:var(--blue-pale);padding:.1em .4em;border-radius:6px;word-break:break-all}
+table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.6rem .75rem;border-bottom:1px solid var(--line)}
+.note{border-left:4px solid var(--blue);background:var(--blue-pale);padding:1rem 1.25rem;border-radius:0 var(--r1) var(--r1) 0}
+footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-size:.9rem}
+section{margin:2.5rem 0}

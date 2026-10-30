@@ -72,10 +72,23 @@ pub struct LayerProps {
     pub link: Option<u64>,
     /// Écrêtage : le calque n'apparaît que là où le calque non écrêté situé dessous est opaque.
     pub clip_to_below: bool,
+    /// Groupes seulement : `true` = groupe isolé, `false` = « traverser » (les enfants se fusionnent
+    /// directement avec ce qui est dessous). Sans effet sur un calque raster.
+    pub isolated: bool,
 }
 
-/// Calque raster. Les groupes, réglages, textes et objets dynamiques arrivent ensuite en
-/// généralisant le contenu, sans toucher à `TileGrid` ni à l'historique.
+/// Nature d'un calque : pixels, ou groupe qui en contient d'autres.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LayerKind {
+    #[default]
+    Raster,
+    Group {
+        isolated: bool,
+    },
+}
+
+/// Calque raster ou groupe (un groupe n'a pas de pixels propres : sa grille reste vide). Les réglages, textes
+/// et objets dynamiques arrivent ensuite en généralisant le contenu, sans toucher à `TileGrid` ni à l'historique.
 #[derive(Debug, Clone)]
 pub struct Layer {
     pub id: LayerId,
@@ -87,6 +100,9 @@ pub struct Layer {
     pub locks: Locks,
     pub link: Option<u64>,
     pub clip_to_below: bool,
+    pub kind: LayerKind,
+    /// Groupe parent ; `None` = niveau supérieur.
+    pub group: Option<LayerId>,
     pub mask: Option<Mask>,
     /// Styles de calque, du premier appliqué au dernier ; vide par défaut.
     pub styles: Vec<LayerStyle>,
@@ -105,10 +121,21 @@ impl Layer {
             locks: Locks::default(),
             link: None,
             clip_to_below: false,
+            kind: LayerKind::Raster,
+            group: None,
             mask: None,
             styles: Vec::new(),
             pixels,
         }
+    }
+
+    /// Groupe vide : il n'a pas de pixels, seulement des enfants (isolé par défaut).
+    pub fn new_group(id: LayerId, name: impl Into<String>, pixels: TileGrid) -> Self {
+        Self { kind: LayerKind::Group { isolated: true }, ..Layer::new(id, name, pixels) }
+    }
+
+    pub fn is_group(&self) -> bool {
+        matches!(self.kind, LayerKind::Group { .. })
     }
 
     pub fn props(&self) -> LayerProps {
@@ -121,6 +148,7 @@ impl Layer {
             locks: self.locks,
             link: self.link,
             clip_to_below: self.clip_to_below,
+            isolated: !matches!(self.kind, LayerKind::Group { isolated: false }),
         }
     }
 
@@ -135,6 +163,9 @@ impl Layer {
         self.locks = p.locks;
         self.link = p.link;
         self.clip_to_below = p.clip_to_below;
+        if let LayerKind::Group { isolated } = &mut self.kind {
+            *isolated = p.isolated;
+        }
     }
 }
 
@@ -194,6 +225,48 @@ impl Document {
     /// Réserve les identifiants déjà utilisés par un document relu depuis un fichier.
     pub fn reserve_ids_up_to(&mut self, max_used: u64) {
         self.next_id = self.next_id.max(max_used + 1);
+    }
+
+    /// Vrai si `ancestor` est `id` lui-même ou l'un de ses groupes parents (sert à refuser les cycles).
+    pub fn is_ancestor_or_self(&self, ancestor: LayerId, id: LayerId) -> bool {
+        let mut cur = Some(id);
+        for _ in 0..=self.layers.len() {
+            match cur {
+                Some(c) if c == ancestor => return true,
+                Some(c) => cur = self.layers.iter().find(|l| l.id == c).and_then(|l| l.group),
+                None => return false,
+            }
+        }
+        true // boucle déjà présente : on la traite comme un cycle
+    }
+
+    /// Imbrication d'un calque (0 = niveau supérieur).
+    pub fn depth(&self, id: LayerId) -> usize {
+        let mut depth = 0;
+        let mut cur = self.layers.iter().find(|l| l.id == id).and_then(|l| l.group);
+        while let Some(g) = cur {
+            depth += 1;
+            if depth > self.layers.len() {
+                break;
+            }
+            cur = self.layers.iter().find(|l| l.id == g).and_then(|l| l.group);
+        }
+        depth
+    }
+
+    /// Ordre d'affichage d'un panneau : du haut vers le bas, chaque groupe suivi de ses enfants.
+    pub fn tree_top_first(&self) -> Vec<(LayerId, usize)> {
+        fn walk(d: &Document, parent: Option<LayerId>, depth: usize, out: &mut Vec<(LayerId, usize)>) {
+            for l in d.layers.iter().rev().filter(|l| l.group == parent) {
+                out.push((l.id, depth));
+                if l.is_group() && depth < 64 {
+                    walk(d, Some(l.id), depth + 1, out);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(self, None, 0, &mut out);
+        out
     }
 
     pub fn layer(&self, id: LayerId) -> Result<&Layer, CoreError> {

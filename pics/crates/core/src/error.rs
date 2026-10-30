@@ -19,6 +19,12 @@ pub enum CoreError {
     LayerIndex { index: usize, len: usize },
     #[error("transformation invalide : {0}")]
     InvalidTransform(String),
+    #[error("le calque « {0} » est un groupe : cette opération s'applique à un calque raster")]
+    IsGroup(String),
+    #[error("ce déplacement créerait une boucle de groupes")]
+    GroupCycle,
+    #[error("le calque {0} n'est pas un groupe")]
+    NotAGroup(u64),
     #[error("repère introuvable : {0}")]
     GuideNotFound(u64),
     #[error("raccourci invalide « {0} »")]

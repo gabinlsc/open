@@ -17,7 +17,7 @@ pub mod tile;
 pub mod view;
 
 pub use blend::BlendMode;
-pub use document::{Axis, DocId, Document, Guide, Layer, LayerId, LayerProps, Locks, Mask};
+pub use document::{Axis, DocId, Document, Guide, Layer, LayerId, LayerKind, LayerProps, Locks, Mask};
 pub use error::CoreError;
 pub use geom::{IRect, Size, Vec2};
 pub use styles::LayerStyle;

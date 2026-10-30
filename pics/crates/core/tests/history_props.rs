@@ -3,8 +3,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use openpics_core::commands::{
-    AddGuide, AddLayer, AddMask, MoveLayer, RemoveLayer, RemoveMask, ReplaceTiles, SetLayerProps, SetLayerStyles,
-    SetMaskEnabled,
+    AddGuide, AddLayer, AddMask, MoveLayer, RemoveLayer, RemoveMask, ReplaceTiles, SetLayerGroup, SetLayerProps,
+    SetLayerStyles, SetMaskEnabled,
 };
 use openpics_core::styles::StrokePosition;
 use openpics_core::{Axis, BlendMode, DocId, Document, Layer, LayerId, LayerStyle, Size, TileGrid};
@@ -24,6 +24,8 @@ enum Step {
     Style(usize, u8),
     Paint(usize, u32, u32, [u8; 4]),
     Guide(bool, f64),
+    AddGroup(usize),
+    SetGroup(usize, usize),
 }
 
 fn step() -> impl Strategy<Value = Step> {
@@ -40,6 +42,8 @@ fn step() -> impl Strategy<Value = Step> {
         (0usize..6, 0u8..4).prop_map(|(a, k)| Step::Style(a, k)),
         (0usize..6, 0u32..40, 0u32..40, any::<[u8; 4]>()).prop_map(|(a, x, y, c)| Step::Paint(a, x, y, c)),
         (any::<bool>(), 0.0f64..40.0).prop_map(|(v, p)| Step::Guide(v, p)),
+        (0usize..6).prop_map(Step::AddGroup),
+        (0usize..6, 0usize..6).prop_map(|(a, b)| Step::SetGroup(a, b)),
     ]
 }
 
@@ -55,7 +59,7 @@ fn fingerprint(d: &Document) -> String {
     for l in &d.layers {
         let mask = l.mask.as_ref().map(|m| (m.enabled, fnv(&m.pixels.to_rgba8())));
         out += &format!(
-            "{:?}|{}|{}|{}|{}|{:?}|{:?}|{}|{:?}|{:?}|{:?}\n",
+            "{:?}|{}|{}|{}|{}|{:?}|{:?}|{}|{:?}|{:?}|{:?}|{:?}|{:?}\n",
             l.id,
             l.name,
             l.visible,
@@ -64,9 +68,11 @@ fn fingerprint(d: &Document) -> String {
             l.blend,
             l.locks,
             l.clip_to_below,
+            l.group,
+            l.kind,
             l.styles,
             mask,
-            l.pixels.to_rgba8()
+            fnv(&l.pixels.to_rgba8())
         );
     }
     out + &format!("{:?}", d.guides)
@@ -165,6 +171,17 @@ fn run(d: &mut Document, s: &Step) -> bool {
                 }
             }
             None => return false,
+        },
+        Step::AddGroup(i) => {
+            let id = LayerId(d.alloc_id());
+            let group =
+                Layer::new_group(id, format!("Groupe {}", id.0), TileGrid::new(size.width, size.height).unwrap());
+            d.execute(Box::new(AddLayer::new(i % (d.layers.len() + 1), group)))
+        }
+        Step::SetGroup(a, b) => match (pick(d, *a), pick(d, *b)) {
+            // Cibles invalides (non-groupe, boucle) : la commande doit être refusée sans rien modifier.
+            (Some(layer), Some(group)) => d.execute(Box::new(SetLayerGroup::new(layer, Some(group)))),
+            _ => return false,
         },
         Step::Guide(vertical, p) => {
             d.execute(Box::new(AddGuide::new(if *vertical { Axis::Vertical } else { Axis::Horizontal }, *p)))

@@ -4,7 +4,7 @@ import { useStore } from "../store";
 import { StylePanel } from "./StylePanel";
 
 function propsOf(l: LayerDto, patch: Partial<LayerPropsDto> = {}): LayerPropsDto {
-  return { name: l.name, visible: l.visible, opacity: l.opacity, fill: l.fill, blend: l.blend, locks: l.locks, clipToBelow: l.clipToBelow, ...patch };
+  return { name: l.name, visible: l.visible, opacity: l.opacity, fill: l.fill, blend: l.blend, locks: l.locks, clipToBelow: l.clipToBelow, isolated: l.isolated, ...patch };
 }
 
 /** Curseur 0–100 % : n'envoie au cœur (donc à l'historique) qu'à la fin du geste, pas à chaque pas. */
@@ -43,7 +43,6 @@ export function LayerPanel() {
   if (!snapshot || snapshot.docs.length === 0) return null;
   const { layers, activeLayerId, blendModes } = snapshot;
   const active = layers.find((l) => l.id === activeLayerId) ?? null;
-  const stackIndex = (id: number) => layers.length - 1 - layers.findIndex((l) => l.id === id);
   const patch = (l: LayerDto, p: Partial<LayerPropsDto>) => void run(() => api.layerSetProps(l.id, propsOf(l, p)));
 
   return (
@@ -51,7 +50,7 @@ export function LayerPanel() {
       <h3 id="p-layers">Calques</h3>
       <ul className="layers" role="listbox" aria-label="Pile de calques, du haut vers le bas">
         {layers.map((l) => (
-          <li key={l.id} role="option" aria-selected={l.id === activeLayerId} className={l.id === activeLayerId ? "layer active" : "layer"}>
+          <li key={l.id} role="option" aria-selected={l.id === activeLayerId} aria-level={l.depth + 1} className={l.id === activeLayerId ? "layer active" : "layer"} style={{ paddingLeft: l.depth * 14 }}>
             <button
               className="eye"
               aria-pressed={l.visible}
@@ -62,6 +61,7 @@ export function LayerPanel() {
               {l.visible ? "◉" : "○"}
             </button>
             <button className="layer-name" onClick={() => void run(() => api.layerSelect(l.id))}>
+              {l.isGroup && <span aria-label="groupe" title="Groupe">▸ </span>}
               {l.clipToBelow && <span aria-label="écrêté" title="Masque d'écrêtage">↳ </span>}
               {l.name}
               {l.hasMask && <span className={l.maskEnabled ? "badge" : "badge off"} title="Masque de calque">masque</span>}
@@ -72,9 +72,10 @@ export function LayerPanel() {
       </ul>
       <div className="row wrap">
         <button className="btn small secondary" onClick={() => void run(api.layerAdd)}>Nouveau</button>
+        <button className="btn small secondary" onClick={() => void run(api.groupAdd)}>Groupe</button>
         <button className="btn small secondary" disabled={!active || layers.length <= 1} onClick={() => active && void run(() => api.layerRemove(active.id))}>Supprimer</button>
-        <button className="btn small ghost" aria-label="Monter le calque" disabled={!active || stackIndex(active.id) >= layers.length - 1} onClick={() => active && void run(() => api.layerMove(active.id, stackIndex(active.id) + 1))}>↑</button>
-        <button className="btn small ghost" aria-label="Descendre le calque" disabled={!active || stackIndex(active.id) <= 0} onClick={() => active && void run(() => api.layerMove(active.id, stackIndex(active.id) - 1))}>↓</button>
+        <button className="btn small ghost" aria-label="Monter le calque" disabled={!active} onClick={() => active && void run(() => api.layerMoveStep(active.id, true))}>↑</button>
+        <button className="btn small ghost" aria-label="Descendre le calque" disabled={!active} onClick={() => active && void run(() => api.layerMoveStep(active.id, false))}>↓</button>
       </div>
 
       {active && (
@@ -86,6 +87,21 @@ export function LayerPanel() {
               {blendModes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
           </label>
+          <label className="field">
+            Dans le groupe
+            <select
+              value={active.group ?? ""}
+              onChange={(e) => void run(() => api.layerSetGroup(active.id, e.target.value === "" ? null : Number(e.target.value)))}
+            >
+              <option value="">(aucun)</option>
+              {layers.filter((l) => l.isGroup && l.id !== active.id).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </label>
+          {active.isGroup && (
+            <label className="inline">
+              <input type="checkbox" checked={!active.isolated} onChange={(e) => patch(active, { isolated: !e.target.checked })} /> Traverser (ne pas isoler le groupe)
+            </label>
+          )}
           <Percent label="Opacité" value={active.opacity} onCommit={(v) => patch(active, { opacity: v })} />
           <Percent label="Remplissage" value={active.fill} onCommit={(v) => patch(active, { fill: v })} />
           <fieldset className="checks">

@@ -9,7 +9,9 @@ use std::path::Path;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::{DynamicImage, ImageReader, RgbaImage};
 use openpics_core::tile::MAX_DIMENSION;
-use openpics_core::{BlendMode, DocId, Document, Guide, Layer, LayerId, LayerStyle, Locks, Mask, Size, TileGrid};
+use openpics_core::{
+    BlendMode, DocId, Document, Guide, Layer, LayerId, LayerKind, LayerStyle, Locks, Mask, Size, TileGrid,
+};
 use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
@@ -61,6 +63,12 @@ struct LayerEntry {
     mask: Option<MaskEntry>,
     #[serde(default)]
     styles: Vec<LayerStyle>,
+    /// Groupe parent (identifiant de calque), absent = niveau supérieur.
+    #[serde(default)]
+    group: Option<u64>,
+    /// `Some(isolé)` pour un groupe, absent pour un calque raster.
+    #[serde(default)]
+    group_isolated: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -82,6 +90,11 @@ impl LayerEntry {
             clip_to_below: l.clip_to_below,
             mask: l.mask.as_ref().map(|m| MaskEntry { enabled: m.enabled }),
             styles: l.styles.clone(),
+            group: l.group.map(|g| g.0),
+            group_isolated: match l.kind {
+                LayerKind::Group { isolated } => Some(isolated),
+                LayerKind::Raster => None,
+            },
         }
     }
 }
@@ -141,8 +154,10 @@ pub(crate) fn write(doc: &Document, path: &Path) -> Result<(), IoError> {
     // Le PNG est déjà compressé : le re-deflater coûte du temps sans gagner d'espace.
     let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored).large_file(true);
     for layer in &doc.layers {
-        zip.start_file(layer_path(layer.id.0), stored)?;
-        zip.write_all(&encode_png(&layer.pixels)?)?;
+        if !layer.is_group() {
+            zip.start_file(layer_path(layer.id.0), stored)?;
+            zip.write_all(&encode_png(&layer.pixels)?)?;
+        }
         if let Some(mask) = &layer.mask {
             zip.start_file(mask_path(layer.id.0), stored)?;
             zip.write_all(&encode_png(&mask.pixels)?)?;
@@ -183,7 +198,10 @@ pub(crate) fn read(path: &Path, id: DocId) -> Result<Document, IoError> {
     let mut max_id = 0;
     let doc_size = Size::new(manifest.width, manifest.height);
     for entry in &manifest.layers {
-        let pixels = read_grid(&mut zip, &layer_path(entry.id), doc_size)?;
+        let pixels = match entry.group_isolated {
+            Some(_) => TileGrid::new(doc_size.width, doc_size.height)?,
+            None => read_grid(&mut zip, &layer_path(entry.id), doc_size)?,
+        };
         let mut layer = Layer::new(LayerId(entry.id), entry.name.clone(), pixels);
         layer.visible = entry.visible;
         // `set_props` borne opacité et remplissage : un fichier trafiqué ne peut pas produire un alpha invalide.
@@ -196,12 +214,26 @@ pub(crate) fn read(path: &Path, id: DocId) -> Result<Document, IoError> {
         props.clip_to_below = entry.clip_to_below;
         layer.set_props(&props);
         layer.styles = entry.styles.iter().map(LayerStyle::sanitized).collect();
+        if let Some(isolated) = entry.group_isolated {
+            layer.kind = LayerKind::Group { isolated };
+        }
+        layer.group = entry.group.map(LayerId);
         if let Some(m) = &entry.mask {
             layer.mask =
                 Some(Mask { pixels: read_grid(&mut zip, &mask_path(entry.id), doc_size)?, enabled: m.enabled });
         }
         max_id = max_id.max(entry.id);
         doc.layers.push(layer);
+    }
+    // Un fichier trafiqué ne doit pas produire de parent absent, de non-groupe parent ni de boucle.
+    let valid: Vec<(u64, bool)> = doc.layers.iter().map(|l| (l.id.0, l.is_group())).collect();
+    for i in 0..doc.layers.len() {
+        let Some(parent) = doc.layers[i].group else { continue };
+        let ok = valid.iter().any(|(id, is_group)| *id == parent.0 && *is_group)
+            && !doc.is_ancestor_or_self(doc.layers[i].id, parent);
+        if !ok {
+            doc.layers[i].group = None;
+        }
     }
     max_id = manifest.guides.iter().map(|g| g.id).fold(max_id, u64::max);
     doc.guides = manifest.guides;
@@ -324,6 +356,42 @@ mod tests {
             LayerStyle::OuterGlow { opacity, size, .. } => assert!(*opacity <= 1.0 && *size <= 250.0),
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn groups_roundtrip_and_hostile_parents_are_dropped() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("groups.ocv");
+        let mut d = sample();
+        let g = LayerId(d.alloc_id());
+        d.layers.push(Layer::new_group(g, "Groupe", TileGrid::new(300, 260).unwrap()));
+        d.layers[1].group = Some(g);
+        d.layers.iter_mut().find(|l| l.id == g).unwrap().kind = LayerKind::Group { isolated: false };
+        save(&mut d, &p).unwrap();
+        let back = open(&p, DocId(2)).unwrap();
+        let bg = back.layers.iter().find(|l| l.id == g).unwrap();
+        assert_eq!(bg.kind, LayerKind::Group { isolated: false });
+        assert_eq!(back.layers[1].group, Some(g));
+        assert_eq!(back.flatten_rgba8(), d.flatten_rgba8());
+
+        let q = dir.path().join("hostile.ocv");
+        let mut zip = ZipWriter::new(std::fs::File::create(&q).unwrap());
+        zip.start_file(MANIFEST, SimpleFileOptions::default()).unwrap();
+        zip.write_all(br#"{"format":"openpics","schema":2,"name":"x","width":1,"height":1,"layers":[{"id":1,"name":"a","visible":true,"group":2},{"id":2,"name":"b","visible":true,"group":1},{"id":3,"name":"c","visible":true,"group":3},{"id":4,"name":"d","visible":true,"group":99}]}"#).unwrap();
+        for id in 1..=4 {
+            zip.start_file(layer_path(id), SimpleFileOptions::default()).unwrap();
+            let mut png = Vec::new();
+            RgbaImage::from_pixel(1, 1, image::Rgba([1, 2, 3, 255]))
+                .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
+                .unwrap();
+            zip.write_all(&png).unwrap();
+        }
+        zip.finish().unwrap();
+        let hostile = open(&q, DocId(3)).unwrap();
+        assert!(
+            hostile.layers.iter().all(|l| l.group.is_none()),
+            "rasters ne sont pas des groupes : tous les parents sont rejetés"
+        );
     }
 
     #[test]

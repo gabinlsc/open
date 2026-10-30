@@ -239,6 +239,11 @@ impl Renderer {
                 min_filter: filter,
                 address_mode_u: wgpu::AddressMode::ClampToEdge,
                 address_mode_v: wgpu::AddressMode::ClampToEdge,
+                mipmap_filter: if filter == wgpu::FilterMode::Linear {
+                    wgpu::MipmapFilterMode::Linear
+                } else {
+                    wgpu::MipmapFilterMode::Nearest
+                },
                 ..Default::default()
             })
         };
@@ -651,35 +656,43 @@ impl Renderer {
                 return;
             }
         }
+        let Tile::Pixels(data) = tile.as_ref() else { return };
+        let bind_group = self.upload_tile(data);
+        self.cache.insert(key, CachedTile { source: Source::Tile(tile.clone()), bind_group, last_used: self.frame });
+    }
+
+    /// Crée la texture d'une tuile avec sa chaîne de mipmaps et le groupe de liaison associé.
+    fn upload_tile(&self, rgba: &[u8]) -> wgpu::BindGroup {
+        let levels = mip_chain(rgba);
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("tile"),
             size: wgpu::Extent3d { width: TILE_SIZE, height: TILE_SIZE, depth_or_array_layers: 1 },
-            mip_level_count: 1,
+            mip_level_count: levels.len() as u32,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        if let Tile::Pixels(data) = tile.as_ref() {
+        for (level, (side, data)) in levels.iter().enumerate() {
             self.queue.write_texture(
-                texture.as_image_copy(),
-                data,
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(TILE_SIZE * 4),
-                    rows_per_image: Some(TILE_SIZE),
+                wgpu::TexelCopyTextureInfo {
+                    texture: &texture,
+                    mip_level: level as u32,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
                 },
-                wgpu::Extent3d { width: TILE_SIZE, height: TILE_SIZE, depth_or_array_layers: 1 },
+                data,
+                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(side * 4), rows_per_image: Some(*side) },
+                wgpu::Extent3d { width: *side, height: *side, depth_or_array_layers: 1 },
             );
         }
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("tile"),
             layout: &self.tile_layout,
             entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) }],
-        });
-        self.cache.insert(key, CachedTile { source: Source::Tile(tile.clone()), bind_group, last_used: self.frame });
+        })
     }
 
     /// Compose une tuile avec le compositeur de référence et la téléverse.
@@ -692,32 +705,7 @@ impl Renderer {
         }
         let composed = openpics_core::composite::composite_tile(doc, tile);
         let bytes: Vec<u8> = composed.iter().flat_map(|p| p.map(|c| (c.clamp(0.0, 1.0) * 255.0 + 0.5) as u8)).collect();
-        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("tile composée"),
-            size: wgpu::Extent3d { width: TILE_SIZE, height: TILE_SIZE, depth_or_array_layers: 1 },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        self.queue.write_texture(
-            texture.as_image_copy(),
-            &bytes,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(TILE_SIZE * 4),
-                rows_per_image: Some(TILE_SIZE),
-            },
-            wgpu::Extent3d { width: TILE_SIZE, height: TILE_SIZE, depth_or_array_layers: 1 },
-        );
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("tile composée"),
-            layout: &self.tile_layout,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) }],
-        });
+        let bind_group = self.upload_tile(&bytes);
         self.cache
             .insert(key, CachedTile { source: Source::Revision(doc.revision()), bind_group, last_used: self.frame });
     }
@@ -750,6 +738,41 @@ fn is_plain(doc: &Document) -> bool {
         }
         _ => false,
     }
+}
+
+/// Niveaux réduits d'une tuile 256×256 (jusqu'à 16×16) : chaque texel est la moyenne des 4 du niveau
+/// précédent, pondérée par l'alpha pour qu'un bord transparent ne ternisse pas la couleur.
+fn mip_chain(rgba: &[u8]) -> Vec<(u32, Vec<u8>)> {
+    let mut levels = vec![(TILE_SIZE, rgba.to_vec())];
+    while let Some((side, prev)) = levels.last() {
+        if *side <= 16 {
+            break;
+        }
+        let (side, half) = (*side as usize, *side as usize / 2);
+        let mut next = vec![0u8; half * half * 4];
+        for y in 0..half {
+            for x in 0..half {
+                let (mut rgb, mut a_sum) = ([0.0f32; 3], 0.0f32);
+                for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                    let i = ((2 * y + dy) * side + 2 * x + dx) * 4;
+                    let a = f32::from(prev[i + 3]);
+                    a_sum += a;
+                    for (c, v) in rgb.iter_mut().enumerate() {
+                        *v += f32::from(prev[i + c]) * a;
+                    }
+                }
+                let o = (y * half + x) * 4;
+                if a_sum > 0.0 {
+                    for (c, v) in rgb.iter().enumerate() {
+                        next[o + c] = (v / a_sum + 0.5) as u8;
+                    }
+                }
+                next[o + 3] = (a_sum / 4.0 + 0.5) as u8;
+            }
+        }
+        levels.push((half as u32, next));
+    }
+    levels
 }
 
 fn request_adapter(instance: &wgpu::Instance, surface: Option<&wgpu::Surface<'_>>) -> Result<wgpu::Adapter, GpuError> {
@@ -906,6 +929,44 @@ mod tests {
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::empty())
             .validate(&module)
             .expect("le WGSL doit être valide");
+    }
+
+    #[test]
+    fn mip_chain_halves_down_to_16_and_weights_by_alpha() {
+        let mut px = vec![0u8; (TILE_SIZE * TILE_SIZE * 4) as usize];
+        // Un texel rouge opaque entouré de transparent : sa couleur ne doit pas être diluée dans le noir.
+        px[0..4].copy_from_slice(&[255, 0, 0, 255]);
+        let levels = mip_chain(&px);
+        assert_eq!(levels.iter().map(|(s, _)| *s).collect::<Vec<_>>(), vec![256, 128, 64, 32, 16]);
+        for (_, data) in &levels {
+            assert_eq!(&data[0..3], &[255, 0, 0], "la couleur reste rouge à tous les niveaux");
+        }
+        assert_eq!(levels[1].1[3], 64, "alpha moyenné : 255 / 4");
+        let flat = vec![100u8; (TILE_SIZE * TILE_SIZE * 4) as usize];
+        assert!(mip_chain(&flat).iter().all(|(_, d)| d.iter().all(|&b| b == 100)));
+    }
+
+    #[test]
+    fn zoomed_out_rendering_averages_instead_of_aliasing() {
+        let Some(mut r) = headless() else { return };
+        let mut doc = Document::new(DocId(1), "t", Size::new(256, 256)).unwrap();
+        // Damier fin noir/blanc : à 25 % l'échantillonnage direct donnerait du noir ou du blanc, la moyenne donne du gris.
+        for y in 0..256 {
+            for x in 0..256 {
+                let v = if (x + y) % 2 == 0 { 0 } else { 255 };
+                doc.layers[0].pixels.put_pixel(x, y, [v, v, v, 255]);
+            }
+        }
+        let frame = FrameParams {
+            document: Some(&doc),
+            viewport: Viewport { zoom: 0.25, origin: Vec2::default() },
+            settings: ViewSettings { show_grid: false, show_guides: false, ..ViewSettings::default() },
+            theme: Theme::Light,
+            preview_guide: None,
+        };
+        let img = r.render_to_rgba8(&frame, (100, 100)).unwrap();
+        let p = pixel(&img, 100, 20, 20);
+        assert!(p[0] > 90 && p[0] < 165, "gris moyen attendu, obtenu {p:?}");
     }
 
     #[test]

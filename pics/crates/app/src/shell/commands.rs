@@ -188,6 +188,21 @@ pub fn layer_add(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
 }
 
 #[tauri::command]
+pub fn group_add(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.group_add().map(|_| ()))
+}
+
+#[tauri::command]
+pub fn layer_set_group(shared: State<'_, Shared>, id: u64, group: Option<u64>) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.layer_set_group(id, group))
+}
+
+#[tauri::command]
+pub fn layer_move_step(shared: State<'_, Shared>, id: u64, up: bool) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.layer_move_step(id, up))
+}
+
+#[tauri::command]
 pub fn layer_remove(shared: State<'_, Shared>, id: u64) -> ApiResult<Snapshot> {
     mutate(&shared, |s| s.layer_remove(id))
 }

@@ -280,6 +280,13 @@ pub struct LayerDto {
     pub has_mask: bool,
     pub mask_enabled: bool,
     pub styles: Vec<StyleDto>,
+    pub is_group: bool,
+    /// Groupes : isolé (`true`) ou « traverser » (`false`).
+    pub isolated: bool,
+    #[ts(type = "number | null")]
+    pub group: Option<u64>,
+    /// Imbrication (0 = niveau supérieur), pour l'indentation du panneau.
+    pub depth: usize,
 }
 
 /// Identifiant JSON d'un mode (`multiply`, `soft_light`…), identique à celui du format `.ocv`.
@@ -305,6 +312,10 @@ impl From<&Layer> for LayerDto {
             has_mask: l.mask.is_some(),
             mask_enabled: l.mask.as_ref().is_some_and(|m| m.enabled),
             styles: l.styles.iter().map(StyleDto::from).collect(),
+            is_group: l.is_group(),
+            isolated: l.props().isolated,
+            group: l.group.map(|g| g.0),
+            depth: 0,
         }
     }
 }
@@ -332,6 +343,7 @@ pub struct LayerPropsDto {
     pub blend: String,
     pub locks: LocksDto,
     pub clip_to_below: bool,
+    pub isolated: bool,
 }
 
 impl LayerPropsDto {
@@ -346,6 +358,7 @@ impl LayerPropsDto {
             locks: self.locks.into(),
             link: base.link,
             clip_to_below: self.clip_to_below,
+            isolated: self.isolated,
         })
     }
 }

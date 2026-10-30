@@ -6,4 +6,12 @@ export type LayerDto = { id: number, name: string, visible: boolean, opacity: nu
 /**
  * Identifiant stable du mode (voir `Snapshot::blend_modes`).
  */
-blend: string, locks: LocksDto, clipToBelow: boolean, hasMask: boolean, maskEnabled: boolean, styles: Array<StyleDto>, };
+blend: string, locks: LocksDto, clipToBelow: boolean, hasMask: boolean, maskEnabled: boolean, styles: Array<StyleDto>, isGroup: boolean, 
+/**
+ * Groupes : isolé (`true`) ou « traverser » (`false`).
+ */
+isolated: boolean, group: number | null, 
+/**
+ * Imbrication (0 = niveau supérieur), pour l'indentation du panneau.
+ */
+depth: number, };

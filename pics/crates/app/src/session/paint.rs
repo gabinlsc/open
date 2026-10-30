@@ -5,6 +5,7 @@ use openpics_core::commands::ReplaceTiles;
 use openpics_core::{LayerId, TileGrid};
 use openpics_ops::brush::{PaintKind, PaintStroke};
 use openpics_ops::fill::{Bucket, GradientKind, bucket_fill, gradient};
+use openpics_ops::liquify::{Liquify, LiquifyMode};
 use openpics_ops::retouch::{RetouchKind, RetouchStroke, TonalRange, patch, spot_heal};
 use openpics_ops::selection::through_selection;
 
@@ -19,6 +20,12 @@ pub(super) enum StrokeKind {
     TwoPoint {
         start: (f64, f64),
         base: TileGrid,
+    },
+    /// Fluidité : le champ de déplacement vit dans `Liquify`, `last` est le point précédent.
+    Liquify {
+        state: Box<Liquify>,
+        base: TileGrid,
+        last: (f64, f64),
     },
 }
 
@@ -45,6 +52,7 @@ fn tool_name(tool: Tool) -> &'static str {
         Tool::Dodge => "Densité −",
         Tool::Burn => "Densité +",
         Tool::Sponge => "Éponge",
+        Tool::Liquify => "Fluidité",
         _ => "Peinture",
     }
 }
@@ -171,6 +179,7 @@ impl Session {
                 return self.commit_pixels(layer, tool, &base, healed);
             }
             Tool::Gradient | Tool::Patch => StrokeKind::TwoPoint { start: at, base },
+            Tool::Liquify => StrokeKind::Liquify { state: Box::new(Liquify::new(&base, selection)), base, last: at },
             _ => return Ok(()),
         };
         self.stroke = Some(ActiveStroke { layer, tool, kind });
@@ -198,6 +207,25 @@ impl Session {
                 Some(self.gradient_result(base, *start, at)?)
             }
             StrokeKind::TwoPoint { .. } => None,
+            StrokeKind::Liquify { state, last, .. } => {
+                let o = &self.paint;
+                let mode = match o.liquify_mode {
+                    crate::dto::LiquifyModeDto::Push => LiquifyMode::Push,
+                    crate::dto::LiquifyModeDto::Bloat => LiquifyMode::Bloat,
+                    crate::dto::LiquifyModeDto::Pucker => LiquifyMode::Pucker,
+                    crate::dto::LiquifyModeDto::Twirl => LiquifyMode::Twirl,
+                    crate::dto::LiquifyModeDto::Reconstruct => LiquifyMode::Reconstruct,
+                };
+                state.brush(
+                    mode,
+                    (last.0 as f32, last.1 as f32),
+                    (at.0 as f32, at.1 as f32),
+                    o.size / 2.0,
+                    o.opacity * o.flow,
+                )?;
+                *last = at;
+                Some(state.result().clone())
+            }
         };
         let layer = stroke.layer;
         self.stroke = Some(stroke);
@@ -234,6 +262,7 @@ impl Session {
         match stroke.kind {
             StrokeKind::Paint(s) => self.commit_pixels(layer, tool, s.base(), s.result().clone()),
             StrokeKind::Retouch(s) => self.commit_pixels(layer, tool, s.base(), s.result().clone()),
+            StrokeKind::Liquify { state, base, .. } => self.commit_pixels(layer, tool, &base, state.result().clone()),
             StrokeKind::TwoPoint { start, base } if tool == Tool::Gradient => {
                 let result = self.gradient_result(&base, start, at)?;
                 self.commit_pixels(layer, tool, &base, result)
@@ -256,7 +285,7 @@ impl Session {
             let base = match stroke.kind {
                 StrokeKind::Paint(s) => s.base().clone(),
                 StrokeKind::Retouch(s) => s.base().clone(),
-                StrokeKind::TwoPoint { base, .. } => base,
+                StrokeKind::TwoPoint { base, .. } | StrokeKind::Liquify { base, .. } => base,
             };
             let _ = self.set_layer_pixels(stroke.layer, base);
         }
@@ -472,6 +501,33 @@ mod tests {
             n,
             "flouter un aplat blanc ne change rien : pas d'état d'historique"
         );
+    }
+
+    #[test]
+    fn liquify_pushes_pixels_as_one_undoable_stroke() {
+        let mut s = session();
+        options(&mut s, |o| {
+            o.foreground = "#ff0000".into();
+            o.size = 30.0;
+            o.hardness = 1.0;
+            o.size_from_pressure = false;
+        });
+        s.set_tool(Tool::Brush);
+        drag(&mut s, &[(40.0, 50.0), (45.0, 50.0)]);
+        options(&mut s, |o| {
+            o.size = 50.0;
+            o.opacity = 1.0;
+            o.liquify_mode = crate::dto::LiquifyModeDto::Push;
+        });
+        s.set_tool(Tool::Liquify);
+        assert_eq!(px(&s, 66, 50)[1], 255, "avant : le trait rouge s'arrête vers x = 60 (fond blanc)");
+        let n = s.snapshot().history.names.len();
+        drag(&mut s, &[(40.0, 50.0), (50.0, 50.0), (60.0, 50.0), (70.0, 50.0)]);
+        assert!(px(&s, 66, 50)[1] < 150, "la matière rouge a été poussée vers la droite : {:?}", px(&s, 66, 50));
+        let names = s.snapshot().history.names;
+        assert_eq!((names.len(), names.last().unwrap().as_str()), (n + 1, "Fluidité"));
+        s.undo().unwrap();
+        assert_eq!(px(&s, 66, 50)[1], 255);
     }
 
     #[test]

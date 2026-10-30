@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type ThemeChoice } from "../api";
-import { ACTIONS, runAction } from "../actions";
+import { ACTIONS, runAction, startFilter } from "../actions";
 import { prettyChord } from "../keys";
 import { useStore } from "../store";
 import { applyTheme } from "../theme";
@@ -23,6 +23,7 @@ export function MenuBar() {
     void api.setTheme(choice, applyTheme(choice));
   };
 
+  const filterItems: Item[] = (snapshot?.filters ?? []).map((f) => ({ label: `${f.category} › ${f.label}…`, onSelect: () => void startFilter(f.id) }));
   const adjustmentKinds = snapshot?.adjustmentKinds ?? [];
   const hasDoc = (snapshot?.docs.length ?? 0) > 0;
   const menus: { label: string; items: Item[] }[] = [
@@ -64,6 +65,7 @@ export function MenuBar() {
         { action: "select.shrink" },
       ],
     },
+    { label: "Filtre", items: filterItems },
     { label: "Image", items: [{ action: "image.flip_h" }, { action: "image.flip_v" }, { action: "image.invert" }] },
     {
       label: "Affichage",

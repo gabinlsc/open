@@ -40,6 +40,7 @@ struct DocEntry {
     active_layer: Option<LayerId>,
 }
 
+mod filters;
 mod paint;
 mod tools;
 pub use tools::Pointer;
@@ -57,6 +58,7 @@ pub struct Session {
     drag: Option<tools::Drag>,
     paint: crate::dto::PaintOptionsDto,
     stroke: Option<paint::ActiveStroke>,
+    filter_preview: Option<filters::FilterPreview>,
     /// Source du tampon et du correcteur (Alt + clic) et décalage source − destination une fois fixé.
     clone_source: Option<(f64, f64)>,
     clone_offset: Option<(f32, f32)>,
@@ -92,6 +94,7 @@ impl Session {
             drag: None,
             paint: crate::dto::PaintOptionsDto::default(),
             stroke: None,
+            filter_preview: None,
             clone_source: None,
             clone_offset: None,
             selection_preview: None,
@@ -164,6 +167,7 @@ impl Session {
     }
 
     pub fn activate(&mut self, id: u64) -> Result<(), SessionError> {
+        self.filter_cancel();
         if !self.docs.iter().any(|e| e.doc.id.0 == id) {
             return Err(SessionError::DocumentNotFound(id));
         }
@@ -176,6 +180,7 @@ impl Session {
 
     /// Ferme un document ; le voisin de gauche (sinon de droite) prend le relais, comme dans un navigateur.
     pub fn close(&mut self, id: u64) -> Result<(), SessionError> {
+        self.filter_cancel();
         let idx = self.docs.iter().position(|e| e.doc.id.0 == id).ok_or(SessionError::DocumentNotFound(id))?;
         self.docs.remove(idx);
         if self.active == Some(DocId(id)) {
@@ -371,10 +376,12 @@ impl Session {
     // ---- historique et opérations ------------------------------------------------------------
 
     pub fn undo(&mut self) -> Result<bool, SessionError> {
+        self.filter_cancel();
         Ok(self.entry_mut()?.doc.undo()?)
     }
 
     pub fn redo(&mut self) -> Result<bool, SessionError> {
+        self.filter_cancel();
         Ok(self.entry_mut()?.doc.redo()?)
     }
 
@@ -393,6 +400,7 @@ impl Session {
     // ---- calques ----------------------------------------------------------------------------
 
     pub fn layer_select(&mut self, id: u64) -> Result<(), SessionError> {
+        self.filter_cancel();
         let e = self.entry_mut()?;
         e.doc.layer(LayerId(id))?;
         e.active_layer = Some(LayerId(id));
@@ -770,6 +778,7 @@ impl Session {
             active_layer_id,
             blend_modes: blend_infos(),
             has_selection: self.entry().is_ok_and(|e| e.doc.selection.is_some()),
+            filters: crate::dto::filter_infos(),
             adjustment_kinds: crate::dto::adjustment_kinds(),
             tool_options: self.tool_options,
             paint_options: self.paint.clone(),

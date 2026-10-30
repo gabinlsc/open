@@ -48,6 +48,26 @@ async function saveCurrent(): Promise<void> {
   }
 }
 
+/** Démarre l'aperçu d'un filtre avec ses valeurs par défaut. */
+export async function startFilter(id: string): Promise<void> {
+  const info = st().snapshot?.filters.find((f) => f.id === id);
+  if (!info) return;
+  if (st().filter) await cancelFilter();
+  const values = info.params.map((p) => p.value);
+  st().setFilter({ id, values });
+  if (!(await st().run(() => api.filterPreview(id, values)))) st().setFilter(null);
+}
+
+export async function cancelFilter(): Promise<void> {
+  st().setFilter(null);
+  await st().run(api.filterCancel);
+}
+
+export async function commitFilter(): Promise<void> {
+  st().setFilter(null);
+  await st().run(api.filterCommit);
+}
+
 export function requestClose(id: number): void {
   const doc = st().snapshot?.docs.find((d) => d.id === id);
   if (!doc) return;
@@ -145,7 +165,14 @@ export const ACTIONS: Record<string, ActionDef> = {
   "tool.polygon_lasso": { label: "Lasso polygonal", run: () => void st().run(() => api.setTool("polygon_lasso")) },
   "tool.wand": { label: "Baguette magique", run: () => void st().run(() => api.setTool("magic_wand")) },
   "tool.finish": { label: "Valider la forme en cours", run: () => void st().run(api.toolFinish) },
-  "tool.cancel": { label: "Annuler la forme en cours", run: () => void st().run(api.toolCancel) },
+  "tool.cancel": {
+    label: "Annuler la forme en cours",
+    run: () => {
+      // Échap ferme d'abord un filtre en aperçu, sinon abandonne le geste d'outil.
+      if (st().filter) void cancelFilter();
+      else void st().run(api.toolCancel);
+    },
+  },
   "tool.brush": { label: "Pinceau", run: () => void st().run(() => api.setTool("brush")) },
   "tool.pencil": { label: "Crayon", run: () => void st().run(() => api.setTool("pencil")) },
   "tool.eraser": { label: "Gomme", run: () => void st().run(() => api.setTool("eraser")) },
@@ -168,6 +195,7 @@ export const ACTIONS: Record<string, ActionDef> = {
       if (o) void st().run(() => api.setPaintOptions({ ...o, foreground: o.background, background: o.foreground }));
     },
   },
+  "tool.liquify": { label: "Fluidité", run: () => void st().run(() => api.setTool("liquify")) },
   "tool.hand": { label: "Outil Main", run: () => void st().run(() => api.setTool("hand")) },
   "tool.zoom": { label: "Outil Zoom", run: () => void st().run(() => api.setTool("zoom")) },
 };

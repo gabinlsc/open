@@ -26,6 +26,7 @@ const TOOLS: { id: Tool; label: string; action: string; icon: JSX.Element }[] = 
   { id: "dodge", label: "Densité −", action: "tool.dodge", icon: <Glyph>◐</Glyph> },
   { id: "burn", label: "Densité +", action: "tool.burn", icon: <Glyph>◑</Glyph> },
   { id: "sponge", label: "Éponge", action: "tool.sponge", icon: <Glyph>▒</Glyph> },
+  { id: "liquify", label: "Fluidité", action: "tool.liquify", icon: <Glyph>≋</Glyph> },
 ];
 
 export function Toolbar() {

@@ -4,6 +4,8 @@
 
 pub mod brush;
 pub mod fill;
+pub mod filters;
+pub mod liquify;
 pub mod retouch;
 pub mod selection;
 pub mod stats;

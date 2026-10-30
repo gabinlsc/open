@@ -1,5 +1,6 @@
 import { api } from "../api";
 import { activeDoc, useStore } from "../store";
+import { FilterPanel } from "./FilterPanel";
 import { LayerPanel } from "./LayerPanel";
 import { PaintOptions } from "./PaintOptions";
 import { ToolOptions } from "./ToolOptions";
@@ -25,6 +26,7 @@ export function Sidebar() {
           <p className="muted">Aucun document.</p>
         )}
       </section>
+      <FilterPanel />
       <ToolOptions />
       <PaintOptions />
       <LayerPanel />

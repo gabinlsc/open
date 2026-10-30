@@ -560,6 +560,43 @@ impl Command for SetSelection {
     }
 }
 
+/// Remplace les paramètres d'un calque de réglage (valeurs bornées à l'application).
+pub struct SetAdjustment {
+    name: String,
+    layer: LayerId,
+    after: crate::adjust::Adjustment,
+    before: Option<crate::adjust::Adjustment>,
+}
+
+impl SetAdjustment {
+    pub fn new(name: impl Into<String>, layer: LayerId, adjustment: crate::adjust::Adjustment) -> Self {
+        Self { name: name.into(), layer, after: adjustment.sanitized(), before: None }
+    }
+}
+
+impl Command for SetAdjustment {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn apply(&mut self, doc: &mut Document) -> Result<(), CoreError> {
+        let layer = doc.layer_mut(self.layer)?;
+        let name = layer.name.clone();
+        let crate::LayerKind::Adjustment(adj) = &mut layer.kind else { return Err(CoreError::NotAdjustment(name)) };
+        self.before = Some(std::mem::replace(&mut **adj, self.after.clone()));
+        Ok(())
+    }
+
+    fn revert(&mut self, doc: &mut Document) -> Result<(), CoreError> {
+        let before = self.before.take().ok_or(CoreError::LayerNotFound(self.layer.0))?;
+        let layer = doc.layer_mut(self.layer)?;
+        let name = layer.name.clone();
+        let crate::LayerKind::Adjustment(adj) = &mut layer.kind else { return Err(CoreError::NotAdjustment(name)) };
+        **adj = before;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -826,5 +863,28 @@ mod tests {
         assert!(d.selection.is_some());
         d.undo().unwrap();
         assert!(d.selection.is_none());
+    }
+
+    #[test]
+    fn adjustment_parameters_are_sanitized_and_undoable_and_only_for_adjustment_layers() {
+        use crate::adjust::{AdjKind, Adjustment};
+        let (mut d, bottom, _) = two_layer_doc();
+        let id = LayerId(d.alloc_id());
+        d.execute(Box::new(AddLayer::new(
+            2,
+            Layer::new_adjustment(id, "Expo", TileGrid::new(600, 600).unwrap(), Adjustment::new(AdjKind::Exposure)),
+        )))
+        .unwrap();
+        let mut a = Adjustment::new(AdjKind::Exposure);
+        a.values = vec![99.0, f32::NAN, 1.0];
+        d.execute(Box::new(SetAdjustment::new("Exposition", id, a))).unwrap();
+        assert_eq!(d.layer(id).unwrap().adjustment().unwrap().values, vec![5.0, 0.0, 1.0]);
+        d.undo().unwrap();
+        assert_eq!(d.layer(id).unwrap().adjustment().unwrap().values, vec![0.0, 0.0, 1.0]);
+        d.redo().unwrap();
+        assert!(matches!(
+            d.execute(Box::new(SetAdjustment::new("x", bottom, Adjustment::new(AdjKind::Invert)))),
+            Err(CoreError::NotAdjustment(_))
+        ));
     }
 }

@@ -23,6 +23,8 @@ export function MenuBar() {
     void api.setTheme(choice, applyTheme(choice));
   };
 
+  const adjustmentKinds = snapshot?.adjustmentKinds ?? [];
+  const hasDoc = (snapshot?.docs.length ?? 0) > 0;
   const menus: { label: string; items: Item[] }[] = [
     {
       label: "Fichier",
@@ -47,6 +49,7 @@ export function MenuBar() {
         { sep: true },
         { action: "layer.mask_reveal" },
         { action: "layer.mask_hide" },
+        ...(hasDoc ? [{ sep: true } as Item, ...adjustmentKinds.map((k): Item => ({ label: `Réglage : ${k.label}`, onSelect: () => void useStore.getState().run(() => api.adjustmentAdd(k.id)) }))] : []),
       ],
     },
     {

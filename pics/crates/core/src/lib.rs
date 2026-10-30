@@ -3,6 +3,7 @@
 //! Cette séparation permet de tester l'historique, les tuiles et la vue de façon
 //! déterministe, et d'éviter qu'une dépendance lourde (wgpu, codecs) n'entre ici.
 
+pub mod adjust;
 pub mod blend;
 pub mod commands;
 pub mod composite;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type LayerDto, type LayerPropsDto } from "../api";
 import { useStore } from "../store";
+import { AdjustmentPanel } from "./AdjustmentPanel";
 import { StylePanel } from "./StylePanel";
 
 function propsOf(l: LayerDto, patch: Partial<LayerPropsDto> = {}): LayerPropsDto {
@@ -81,12 +82,14 @@ export function LayerPanel() {
       {active && (
         <div className="layer-props">
           <RenameField layer={active} />
+          {!active.adjustment && (
           <label className="field">
             Mode de fusion
             <select value={active.blend} onChange={(e) => patch(active, { blend: e.target.value })}>
               {blendModes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
           </label>
+          )}
           <label className="field">
             Dans le groupe
             <select
@@ -111,7 +114,8 @@ export function LayerPanel() {
             <label><input type="checkbox" checked={active.locks.all} onChange={(e) => patch(active, { locks: { ...active.locks, all: e.target.checked } })} /> Tout</label>
             <label><input type="checkbox" checked={active.clipToBelow} onChange={(e) => patch(active, { clipToBelow: e.target.checked })} /> Écrêter sur le calque du dessous</label>
           </fieldset>
-          <StylePanel layer={active} />
+          {active.adjustment && <AdjustmentPanel layer={active} adj={active.adjustment} />}
+          {!active.adjustment && !active.isGroup && <StylePanel layer={active} />}
           <div className="row wrap">
             {active.hasMask ? (
               <>

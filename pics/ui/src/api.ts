@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { AppStatus } from "./gen/AppStatus";
 import type { ApiError } from "./gen/ApiError";
+import type { AdjustmentDto } from "./gen/AdjustmentDto";
 import type { AxisDto } from "./gen/AxisDto";
 import type { BlendInfo } from "./gen/BlendInfo";
 import type { CanvasRect } from "./gen/CanvasRect";
@@ -24,7 +25,7 @@ import type { TransformDto } from "./gen/TransformDto";
 import type { Tool } from "./gen/Tool";
 import type { ToolOptionsDto } from "./gen/ToolOptionsDto";
 
-export type { AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, PaintOptionsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
+export type { AdjustmentDto, AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, PaintOptionsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
 
 /** Erreur typée côté TS : `code` est stable, `message` est affichable tel quel. */
 export class CommandError extends Error {
@@ -80,6 +81,12 @@ export const api = {
   layerSetProps: (id: number, props: LayerPropsDto) => call<Snapshot>("layer_set_props", { id, props }),
   layerSetStyles: (id: number, styles: StyleDto[]) => call<Snapshot>("layer_set_styles", { id, styles }),
   layerTransform: (transform: TransformDto) => call<Snapshot>("layer_transform", { transform }),
+  adjustmentAdd: (kind: string) => call<Snapshot>("adjustment_add", { kind }),
+  adjustmentSetParam: (id: number, param: string, value: number) => call<Snapshot>("adjustment_set_param", { id, param, value }),
+  adjustmentSetCurve: (id: number, points: [number, number][]) => call<Snapshot>("adjustment_set_curve", { id, points }),
+  adjustmentSetStops: (id: number, stops: [number, string][]) => call<Snapshot>("adjustment_set_stops", { id, stops }),
+  adjustmentLoadLut: (id: number, path: string) => call<Snapshot>("adjustment_load_lut", { id, path }),
+  adjustmentMatch: (id: number, source: number, reference: number) => call<Snapshot>("adjustment_match", { id, source, reference }),
   maskAdd: (id: number, reveal: boolean) => call<Snapshot>("mask_add", { id, reveal }),
   maskRemove: (id: number) => call<Snapshot>("mask_remove", { id }),
   maskSetEnabled: (id: number, enabled: boolean) => call<Snapshot>("mask_set_enabled", { id, enabled }),

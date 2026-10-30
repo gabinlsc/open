@@ -3,6 +3,7 @@
 //! Il travaille tuile par tuile en flottant, ce qui borne la mémoire à une tuile même sur un
 //! document de 100 Mpx. C'est la vérité de référence contre laquelle les shaders GPU sont comparés.
 
+use crate::adjust::Prepared;
 use crate::blend::{BlendMode, composite};
 use crate::document::{Document, Layer};
 use crate::styles::{LayerStyle, Region, effect_alpha, gradient_at};
@@ -201,6 +202,24 @@ pub fn composite_tile(doc: &Document, key: TileKey) -> Vec<Px> {
     backdrop
 }
 
+/// Applique un calque de réglage à `target` : `couleur ← mélange(couleur, réglage(couleur), masque × opacité × limite)`,
+/// seulement là où il y a de la matière (alpha > 0) ; l'alpha n'est jamais modifié.
+fn apply_adjustment(layer: &Layer, key: TileKey, target: &mut [Px], limit: Option<&[f32]>) {
+    let Some(adj) = layer.adjustment() else { return };
+    let prepared: Prepared = adj.prepare();
+    let mask = read_mask(layer, key);
+    for (i, p) in target.iter_mut().enumerate() {
+        let amount = layer.opacity * layer.fill * mask.as_ref().map_or(1.0, |m| m[i]) * limit.map_or(1.0, |l| l[i]);
+        if p[3] <= 0.0 || amount <= 0.0 {
+            continue;
+        }
+        let adjusted = prepared.apply([p[0], p[1], p[2]]);
+        for c in 0..3 {
+            p[c] += (adjusted[c] - p[c]) * amount.min(1.0);
+        }
+    }
+}
+
 fn compose_into(doc: &Document, parent: Option<crate::LayerId>, key: TileKey, backdrop: &mut [Px]) {
     let layers: Vec<&Layer> = doc.layers.iter().filter(|l| l.group == parent).collect();
     let mut i = 0;
@@ -214,6 +233,10 @@ fn compose_into(doc: &Document, parent: Option<crate::LayerId>, key: TileKey, ba
         i = end;
         if !base.visible {
             continue; // un calque caché cache aussi ce qui lui est écrêté
+        }
+        if base.adjustment().is_some() {
+            apply_adjustment(base, key, backdrop, None);
+            continue;
         }
         if matches!(base.kind, crate::LayerKind::Group { isolated: false })
             && base.blend == BlendMode::Normal
@@ -233,6 +256,11 @@ fn compose_into(doc: &Document, parent: Option<crate::LayerId>, key: TileKey, ba
         };
         let base_alpha: Vec<f32> = group.px.iter().map(|p| p[3]).collect();
         for layer in clipped.iter().filter(|l| l.visible) {
+            if layer.adjustment().is_some() {
+                // Réglage écrêté : il ne touche que le calque de base, dans sa forme.
+                apply_adjustment(layer, key, &mut group.px, Some(&base_alpha));
+                continue;
+            }
             let Some(src) = layer_content(doc, layer, key) else { continue };
             let (ox, oy) = tile_origin(key);
             for (idx, (g, s)) in group.px.iter_mut().zip(&src.px).enumerate() {
@@ -593,5 +621,81 @@ mod tests {
         assert!(pos(g) < pos(inner) && pos(inner) < pos(b));
         assert_eq!(d.depth(b), 2);
         assert!(d.is_ancestor_or_self(g, b) && !d.is_ancestor_or_self(b, g));
+    }
+
+    fn adj_doc(kind: crate::adjust::AdjKind, set: &[(&str, f32)]) -> (Document, crate::LayerId) {
+        let mut d = doc(4, 1);
+        d.layers[0].pixels = solid(4, 1, [128, 64, 192, 255]);
+        let mut a = crate::adjust::Adjustment::new(kind);
+        for (id, v) in set {
+            a.set(id, *v);
+        }
+        let id = crate::LayerId(d.alloc_id());
+        d.layers.push(Layer::new_adjustment(id, "Réglage", TileGrid::new(4, 1).unwrap(), a));
+        (d, id)
+    }
+
+    #[test]
+    fn an_adjustment_layer_changes_what_is_below_without_touching_pixels() {
+        let (mut d, id) = adj_doc(crate::adjust::AdjKind::Invert, &[]);
+        assert_eq!(px(&d, 1, 0), [127, 191, 63, 255]);
+        assert_eq!(d.layers[0].pixels.get_pixel(1, 0), [128, 64, 192, 255], "les pixels du dessous sont intacts");
+        d.layer_mut(id).unwrap().visible = false;
+        assert_eq!(px(&d, 1, 0), [128, 64, 192, 255], "non destructif : masquer le réglage restitue l'original");
+    }
+
+    #[test]
+    fn adjustment_opacity_mask_and_transparent_pixels() {
+        let (mut d, id) = adj_doc(crate::adjust::AdjKind::Invert, &[]);
+        d.layer_mut(id).unwrap().opacity = 0.5;
+        let half = px(&d, 0, 0);
+        assert!((i32::from(half[0]) - 128).abs() <= 1, "50 % d'un négatif sur 128 : {half:?}");
+        d.layer_mut(id).unwrap().opacity = 1.0;
+        let mut m = TileGrid::new(4, 1).unwrap();
+        m.put_pixel(0, 0, [255; 4]);
+        d.layer_mut(id).unwrap().mask = Some(Mask { pixels: m, enabled: true });
+        assert_eq!(px(&d, 0, 0), [127, 191, 63, 255]);
+        assert_eq!(px(&d, 3, 0), [128, 64, 192, 255], "masqué : pas de réglage");
+        // Un fond transparent n'est pas coloré par un réglage.
+        let mut e = doc(2, 1);
+        let mut a = crate::adjust::Adjustment::new(crate::adjust::AdjKind::Exposure);
+        a.set("offset", 0.5);
+        let id = crate::LayerId(e.alloc_id());
+        e.layers.push(Layer::new_adjustment(id, "R", TileGrid::new(2, 1).unwrap(), a));
+        assert_eq!(px(&e, 0, 0), [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn a_clipped_adjustment_only_affects_the_layer_below_inside_its_shape() {
+        let mut d = doc(4, 1);
+        d.layers[0].pixels = solid(4, 1, [255, 255, 255, 255]);
+        let mut shape = TileGrid::new(4, 1).unwrap();
+        shape.put_pixel(1, 0, [100, 100, 100, 255]);
+        let top = d.add_layer("forme", shape);
+        let mut a = crate::adjust::Adjustment::new(crate::adjust::AdjKind::Invert);
+        a.set("x", 0.0);
+        let id = crate::LayerId(d.alloc_id());
+        let mut adj = Layer::new_adjustment(id, "Négatif écrêté", TileGrid::new(4, 1).unwrap(), a);
+        adj.clip_to_below = true;
+        d.layers.push(adj);
+        let _ = top;
+        assert_eq!(px(&d, 1, 0), [155, 155, 155, 255], "la forme est inversée");
+        assert_eq!(px(&d, 0, 0), [255, 255, 255, 255], "le fond ne l'est pas");
+    }
+
+    #[test]
+    fn adjustments_inside_an_isolated_group_do_not_reach_the_backdrop() {
+        let mut d = doc(2, 1);
+        d.layers[0].pixels = solid(2, 1, [100, 100, 100, 255]);
+        let g = crate::LayerId(d.alloc_id());
+        d.layers.push(Layer::new_group(g, "G", TileGrid::new(2, 1).unwrap()));
+        let a = crate::adjust::Adjustment::new(crate::adjust::AdjKind::Invert);
+        let id = crate::LayerId(d.alloc_id());
+        let mut adj = Layer::new_adjustment(id, "N", TileGrid::new(2, 1).unwrap(), a);
+        adj.group = Some(g);
+        d.layers.push(adj);
+        assert_eq!(px(&d, 0, 0), [100, 100, 100, 255], "isolé : le réglage ne voit que le contenu du groupe (vide)");
+        d.layer_mut(g).unwrap().kind = crate::LayerKind::Group { isolated: false };
+        assert_eq!(px(&d, 0, 0), [155, 155, 155, 255], "traverser : le réglage agit sur le fond");
     }
 }

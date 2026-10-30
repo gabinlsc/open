@@ -8,6 +8,7 @@ use std::path::Path;
 
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::{DynamicImage, ImageReader, RgbaImage};
+use openpics_core::adjust::{AdjKind, Adjustment, Extra, Lut3D};
 use openpics_core::tile::MAX_DIMENSION;
 use openpics_core::{
     BlendMode, DocId, Document, Guide, Layer, LayerId, LayerKind, LayerStyle, Locks, Mask, Size, TileGrid,
@@ -69,6 +70,87 @@ struct LayerEntry {
     /// `Some(isolé)` pour un groupe, absent pour un calque raster.
     #[serde(default)]
     group_isolated: Option<bool>,
+    /// Présent pour un calque de réglage.
+    #[serde(default)]
+    adjustment: Option<AdjEntry>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct AdjEntry {
+    kind: AdjKind,
+    values: Vec<f32>,
+    #[serde(default)]
+    curves: Option<CurvesEntry>,
+    #[serde(default)]
+    stops: Option<Vec<(f32, [u8; 3])>>,
+    /// Contenu d'un fichier `.cube`.
+    #[serde(default)]
+    lut_cube: Option<String>,
+    #[serde(default)]
+    color_match: Option<MatchEntry>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct CurvesEntry {
+    master: Vec<(f32, f32)>,
+    r: Vec<(f32, f32)>,
+    g: Vec<(f32, f32)>,
+    b: Vec<(f32, f32)>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct MatchEntry {
+    src_mean: [f32; 3],
+    src_std: [f32; 3],
+    ref_mean: [f32; 3],
+    ref_std: [f32; 3],
+}
+
+impl AdjEntry {
+    fn from_adjustment(a: &Adjustment) -> Self {
+        let mut e = AdjEntry {
+            kind: a.kind,
+            values: a.values.clone(),
+            curves: None,
+            stops: None,
+            lut_cube: None,
+            color_match: None,
+        };
+        match &a.extra {
+            Extra::Curves { master, r, g, b } => {
+                e.curves = Some(CurvesEntry { master: master.clone(), r: r.clone(), g: g.clone(), b: b.clone() })
+            }
+            Extra::Stops(s) => e.stops = Some(s.clone()),
+            Extra::Lut(l) => e.lut_cube = Some(l.to_cube()),
+            Extra::Match { src_mean, src_std, ref_mean, ref_std } => {
+                e.color_match =
+                    Some(MatchEntry { src_mean: *src_mean, src_std: *src_std, ref_mean: *ref_mean, ref_std: *ref_std })
+            }
+            Extra::None => {}
+        }
+        e
+    }
+
+    /// Un LUT illisible fait échouer l'ouverture avec un message précis plutôt que d'être remplacé en silence.
+    fn into_adjustment(self) -> Result<Adjustment, IoError> {
+        let mut a = Adjustment::new(self.kind);
+        a.values = self.values;
+        if let Some(c) = self.curves {
+            a.extra = Extra::Curves { master: c.master, r: c.r, g: c.g, b: c.b };
+        }
+        if let Some(s) = self.stops {
+            a.extra = Extra::Stops(s);
+        }
+        if let Some(text) = self.lut_cube {
+            let lut = Lut3D::parse_cube(&text).map_err(|e| IoError::Invalid(format!("LUT 3D illisible : {e}")))?;
+            a.extra = Extra::Lut(std::sync::Arc::new(lut));
+        }
+        if let Some(m) = self.color_match {
+            a.extra =
+                Extra::Match { src_mean: m.src_mean, src_std: m.src_std, ref_mean: m.ref_mean, ref_std: m.ref_std };
+        }
+        Ok(a.sanitized())
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -91,10 +173,11 @@ impl LayerEntry {
             mask: l.mask.as_ref().map(|m| MaskEntry { enabled: m.enabled }),
             styles: l.styles.clone(),
             group: l.group.map(|g| g.0),
-            group_isolated: match l.kind {
-                LayerKind::Group { isolated } => Some(isolated),
-                LayerKind::Raster => None,
+            group_isolated: match &l.kind {
+                LayerKind::Group { isolated } => Some(*isolated),
+                _ => None,
             },
+            adjustment: l.adjustment().map(AdjEntry::from_adjustment),
         }
     }
 }
@@ -154,7 +237,7 @@ pub(crate) fn write(doc: &Document, path: &Path) -> Result<(), IoError> {
     // Le PNG est déjà compressé : le re-deflater coûte du temps sans gagner d'espace.
     let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored).large_file(true);
     for layer in &doc.layers {
-        if !layer.is_group() {
+        if layer.is_raster() {
             zip.start_file(layer_path(layer.id.0), stored)?;
             zip.write_all(&encode_png(&layer.pixels)?)?;
         }
@@ -169,7 +252,7 @@ pub(crate) fn write(doc: &Document, path: &Path) -> Result<(), IoError> {
 
 pub(crate) fn read(path: &Path, id: DocId) -> Result<Document, IoError> {
     let mut zip = ZipArchive::new(std::io::BufReader::new(std::fs::File::open(path)?))?;
-    let manifest: Manifest = {
+    let mut manifest: Manifest = {
         let mut buf = Vec::new();
         zip.by_name(MANIFEST)
             .map_err(|_| IoError::Invalid(format!("« {MANIFEST} » est absent")))?
@@ -197,10 +280,11 @@ pub(crate) fn read(path: &Path, id: DocId) -> Result<Document, IoError> {
     doc.layers.clear();
     let mut max_id = 0;
     let doc_size = Size::new(manifest.width, manifest.height);
-    for entry in &manifest.layers {
-        let pixels = match entry.group_isolated {
-            Some(_) => TileGrid::new(doc_size.width, doc_size.height)?,
-            None => read_grid(&mut zip, &layer_path(entry.id), doc_size)?,
+    for entry in &mut manifest.layers {
+        let pixels = if entry.group_isolated.is_some() || entry.adjustment.is_some() {
+            TileGrid::new(doc_size.width, doc_size.height)?
+        } else {
+            read_grid(&mut zip, &layer_path(entry.id), doc_size)?
         };
         let mut layer = Layer::new(LayerId(entry.id), entry.name.clone(), pixels);
         layer.visible = entry.visible;
@@ -216,6 +300,9 @@ pub(crate) fn read(path: &Path, id: DocId) -> Result<Document, IoError> {
         layer.styles = entry.styles.iter().map(LayerStyle::sanitized).collect();
         if let Some(isolated) = entry.group_isolated {
             layer.kind = LayerKind::Group { isolated };
+        }
+        if let Some(adj) = entry.adjustment.take() {
+            layer.kind = LayerKind::Adjustment(Box::new(adj.into_adjustment()?));
         }
         layer.group = entry.group.map(LayerId);
         if let Some(m) = &entry.mask {
@@ -392,6 +479,65 @@ mod tests {
             hostile.layers.iter().all(|l| l.group.is_none()),
             "rasters ne sont pas des groupes : tous les parents sont rejetés"
         );
+    }
+
+    #[test]
+    fn every_adjustment_kind_roundtrips_with_its_extra_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("adj.ocv");
+        let mut d = sample();
+        for kind in AdjKind::ALL {
+            let mut a = Adjustment::new(kind);
+            if let Some(spec) = kind.specs().first() {
+                a.set(spec.id, (spec.min + spec.max) / 2.0);
+            }
+            match kind {
+                AdjKind::Curves => {
+                    a.extra = Extra::Curves {
+                        master: vec![(0.0, 0.1), (0.5, 0.7), (1.0, 0.9)],
+                        r: vec![(0.0, 0.0), (1.0, 1.0)],
+                        g: vec![(0.0, 0.0), (1.0, 1.0)],
+                        b: vec![(0.0, 0.2), (1.0, 1.0)],
+                    }
+                }
+                AdjKind::GradientMap => {
+                    a.extra = Extra::Stops(vec![(0.0, [1, 2, 3]), (0.4, [9, 8, 7]), (1.0, [250, 251, 252])])
+                }
+                AdjKind::Lut3D => a.extra = Extra::Lut(std::sync::Arc::new(Lut3D::identity(3))),
+                AdjKind::ColorMatch => {
+                    a.extra = Extra::Match {
+                        src_mean: [0.1, 0.2, 0.3],
+                        src_std: [0.2; 3],
+                        ref_mean: [0.6; 3],
+                        ref_std: [0.3; 3],
+                    }
+                }
+                _ => {}
+            }
+            let id = openpics_core::LayerId(d.alloc_id());
+            d.layers.push(Layer::new_adjustment(id, kind.label(), TileGrid::new(300, 260).unwrap(), a.clone()));
+            let last = d.layers.len() - 1;
+            assert_eq!(d.layers[last].adjustment(), Some(&a.sanitized()));
+        }
+        save(&mut d, &p).unwrap();
+        let back = open(&p, DocId(7)).unwrap();
+        assert_eq!(back.layers.len(), d.layers.len());
+        for (a, b) in d.layers.iter().zip(&back.layers) {
+            assert_eq!(a.adjustment(), b.adjustment(), "{}", a.name);
+        }
+        assert_eq!(back.flatten_rgba8(), d.flatten_rgba8());
+    }
+
+    #[test]
+    fn an_unreadable_lut_fails_the_open_with_a_precise_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let q = dir.path().join("badlut.ocv");
+        let mut zip = ZipWriter::new(std::fs::File::create(&q).unwrap());
+        zip.start_file(MANIFEST, SimpleFileOptions::default()).unwrap();
+        zip.write_all(br#"{"format":"openpics","schema":2,"name":"x","width":1,"height":1,"layers":[{"id":1,"name":"L","visible":true,"adjustment":{"kind":"lut3_d","values":[1.0],"lut_cube":"LUT_3D_SIZE 2\n0 0 0\n"}}]}"#).unwrap();
+        zip.finish().unwrap();
+        let err = open(&q, DocId(1)).unwrap_err().to_string();
+        assert!(err.contains("LUT 3D illisible"), "{err}");
     }
 
     #[test]

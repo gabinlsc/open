@@ -229,6 +229,36 @@ pub async fn layer_transform(shared: State<'_, Shared>, transform: TransformDto)
 }
 
 #[tauri::command]
+pub fn adjustment_add(shared: State<'_, Shared>, kind: String) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.adjustment_add(&kind).map(|_| ()))
+}
+
+#[tauri::command]
+pub fn adjustment_set_param(shared: State<'_, Shared>, id: u64, param: String, value: f32) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.adjustment_set_param(id, &param, value))
+}
+
+#[tauri::command]
+pub fn adjustment_set_curve(shared: State<'_, Shared>, id: u64, points: Vec<(f32, f32)>) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.adjustment_set_curve(id, points))
+}
+
+#[tauri::command]
+pub fn adjustment_set_stops(shared: State<'_, Shared>, id: u64, stops: Vec<(f32, String)>) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.adjustment_set_stops(id, &stops))
+}
+
+#[tauri::command]
+pub async fn adjustment_load_lut(shared: State<'_, Shared>, id: u64, path: String) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.adjustment_load_lut(id, &PathBuf::from(path)))
+}
+
+#[tauri::command]
+pub async fn adjustment_match(shared: State<'_, Shared>, id: u64, source: u64, reference: u64) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.adjustment_match(id, source, reference))
+}
+
+#[tauri::command]
 pub fn mask_add(shared: State<'_, Shared>, id: u64, reveal: bool) -> ApiResult<Snapshot> {
     mutate(&shared, |s| s.mask_add(id, reveal))
 }

@@ -42,8 +42,10 @@ struct DocEntry {
 
 mod ai;
 mod filters;
+mod image;
 mod paint;
 mod recover;
+mod script;
 mod tools;
 mod vector;
 pub use tools::Pointer;
@@ -71,6 +73,8 @@ pub struct Session {
     pub pan_modifier: bool,
     preview_guide: Option<(Axis, f64)>,
     untitled: u32,
+    recording: Option<Vec<String>>,
+    models_dir: Option<PathBuf>,
     recovery_dir: Option<PathBuf>,
     recovery_tag: String,
 }
@@ -110,6 +114,8 @@ impl Session {
             pan_modifier: false,
             preview_guide: None,
             untitled: 0,
+            recording: None,
+            models_dir: None,
             recovery_dir: None,
             // Distingue les copies de cette exécution de celles d'un plantage précédent (les identifiants de
             // document repartent de 1 à chaque lancement).
@@ -404,8 +410,8 @@ impl Session {
         Ok(self.entry_mut()?.doc.redo()?)
     }
 
-    pub fn apply_op(&mut self, op: ImageOp) -> Result<bool, SessionError> {
-        let op = match op {
+    pub fn apply_op(&mut self, image_op: ImageOp) -> Result<bool, SessionError> {
+        let op = match image_op {
             ImageOp::FlipHorizontal => Op::FlipHorizontal,
             ImageOp::FlipVertical => Op::FlipVertical,
             ImageOp::Invert => Op::Invert,
@@ -413,7 +419,9 @@ impl Session {
         let entry = self.entry_mut()?;
         let layer =
             entry.active_layer.ok_or_else(|| SessionError::InvalidArgument("aucun calque sélectionné".into()))?;
-        Ok(openpics_ops::apply_to_layer(&mut entry.doc, layer, op)?)
+        let changed = openpics_ops::apply_to_layer(&mut entry.doc, layer, op)?;
+        self.record(script::Step::Op(image_op));
+        Ok(changed)
     }
 
     // ---- calques ----------------------------------------------------------------------------
@@ -806,6 +814,7 @@ impl Session {
             can_redo,
             settings: SettingsDto::from(self.settings),
             tool: self.tool,
+            comparing: self.entry().is_ok_and(|e| e.doc.is_comparing()),
         }
     }
 }

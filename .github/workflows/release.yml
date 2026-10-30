@@ -1,0 +1,61 @@
+name: Publication
+
+# Une étiquette `vX.Y.Z` construit les installeurs Windows et les publie avec leurs empreintes.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Installeurs Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pics
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pics/ui/package-lock.json
+      - run: npm ci
+        working-directory: pics/ui
+      - name: Installeurs NSIS et MSI
+        working-directory: pics/crates/app
+        run: ../../ui/node_modules/.bin/tauri build
+      - name: Version portable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path portable/OpenPics | Out-Null
+          Copy-Item pics/target/release/openpics.exe portable/OpenPics/OpenPics.exe
+          New-Item -ItemType File -Path portable/OpenPics/portable | Out-Null
+          Compress-Archive -Path portable/OpenPics -DestinationPath OpenPics-portable-x64.zip
+      - name: Empreintes et releases.json
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          New-Item -ItemType Directory -Path dist | Out-Null
+          Copy-Item pics/target/release/bundle/nsis/*.exe dist/
+          Copy-Item pics/target/release/bundle/msi/*.msi dist/
+          Copy-Item OpenPics-portable-x64.zip dist/
+          $labels = @{ ".exe" = "Installeur Windows (NSIS)"; ".msi" = "Installeur Windows (MSI)"; ".zip" = "Version portable (zip)" }
+          $files = Get-ChildItem dist -File | ForEach-Object {
+            [ordered]@{
+              label  = $labels[$_.Extension]
+              name   = $_.Name
+              size   = $_.Length
+              sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            }
+          }
+          @{ version = $version; files = @($files) } | ConvertTo-Json -Depth 4 | Set-Content dist/releases.json -Encoding utf8
+          ($files | ForEach-Object { "$($_.sha256)  $($_.name)" }) | Set-Content dist/SHA256SUMS.txt -Encoding utf8
+      - name: Publier la release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ github.ref_name }}" dist/* --title "OpenPics ${{ github.ref_name }}" --generate-notes

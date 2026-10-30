@@ -18,3 +18,6 @@ Ce que cette phase **livre** et ce qu'elle **ne livre pas**, sans enjoliver.
 
 ## Tests
 Empreinte correcte/incorrecte, import atomique, catalogue absent/corrompu/traversée de chemin, sujet sur fond uni/dégradé/transparent, trous, diffusion dans un dégradé, annulation du masque.
+
+## Mise à jour (phase 9)
+L'exécution de modèles ONNX de suppression d'arrière‑plan / sélection du sujet est désormais livrée : voir `PHASE9.md`.

@@ -10,6 +10,8 @@ const EN: Record<string, string> = {
   "Nouveau…": "New…", "Ouvrir…": "Open…", "Importer un SVG…": "Import SVG…", "Enregistrer": "Save", "Enregistrer sous…": "Save as…",
   "Exporter en image…": "Export as image…", "Fermer le document": "Close document", "Traitement par lot…": "Batch process…",
   "Annuler": "Undo", "Rétablir": "Redo", "Raccourcis clavier…": "Keyboard shortcuts…", "Palette de commandes…": "Command palette…",
+  "Taille de l'image…": "Image size…", "Exporter à plusieurs échelles…": "Export at multiple scales…",
+  "Comparer avec l'original": "Compare with original", "Scripts et actions…": "Scripts and actions…", "Explorateur de dossier…": "Folder browser…",
   // calque
   "Nouveau calque": "New layer", "Supprimer le calque": "Delete layer", "Rastériser le calque": "Rasterize layer",
   "Ajouter un masque (tout révéler)": "Add mask (reveal all)", "Ajouter un masque (tout masquer)": "Add mask (hide all)",

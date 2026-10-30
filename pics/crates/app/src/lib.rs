@@ -5,6 +5,7 @@ pub mod dto;
 pub mod error;
 pub mod prefs;
 pub mod recovery;
+pub mod saved_actions;
 pub mod session;
 
 #[cfg(feature = "shell")]

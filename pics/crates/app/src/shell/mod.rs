@@ -19,6 +19,7 @@ pub struct AppShared {
     prefs_path: PathBuf,
     models_dir: PathBuf,
     recovery_dir: PathBuf,
+    actions_dir: PathBuf,
     portable: bool,
     app: AppHandle,
     canvas: Mutex<Option<native::Canvas>>,
@@ -134,13 +135,16 @@ pub fn run() {
             let base_dir = config_dir(exe_dir.as_deref(), default_dir);
             let prefs_path = base_dir.join("prefs.json");
             let models_dir = base_dir.join("models");
+            let models_dir_for_session = models_dir.clone();
             let recovery_dir = base_dir.join("recovery");
+            let actions_dir = base_dir.join("actions");
             let prefs = Prefs::load(&prefs_path);
             let shared: Shared = Arc::new(AppShared {
                 session: Mutex::new(Session::new(prefs.settings, prefs.keymap)),
                 prefs_path,
                 models_dir,
                 recovery_dir: recovery_dir.clone(),
+                actions_dir,
                 portable,
                 app: app.handle().clone(),
                 canvas: Mutex::new(None),
@@ -148,6 +152,7 @@ pub fn run() {
             });
             if let Ok(mut session) = shared.session.lock() {
                 session.set_recovery_dir(recovery_dir);
+                session.set_models_dir(models_dir_for_session);
             }
             spawn_autosave(shared.clone());
             app.manage(shared.clone());
@@ -206,6 +211,17 @@ pub fn run() {
             commands::recovery_restore,
             commands::recovery_discard,
             commands::batch_run,
+            commands::image_resize,
+            commands::export_scales,
+            commands::compare_set,
+            commands::script_run,
+            commands::record_start,
+            commands::record_stop,
+            commands::actions_list,
+            commands::actions_load,
+            commands::actions_save,
+            commands::actions_delete,
+            commands::folder_images,
             commands::ai_select_subject,
             commands::ai_remove_background,
             commands::ai_inpaint,

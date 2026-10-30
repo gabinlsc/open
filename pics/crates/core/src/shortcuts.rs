@@ -102,6 +102,7 @@ pub const DEFAULT_BINDINGS: &[(&str, &[&str])] = &[
     ("file.export", &["Ctrl+Alt+Shift+S"]),
     ("file.close", &["Ctrl+W"]),
     ("app.palette", &["Ctrl+K"]),
+    ("view.compare", &["Ctrl+Alt+C"]),
     ("edit.undo", &["Ctrl+Z"]),
     ("edit.redo", &["Ctrl+Shift+Z", "Ctrl+Y"]),
     ("view.zoom_in", &["Ctrl++", "Ctrl+="]),

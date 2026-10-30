@@ -642,6 +642,56 @@ impl Command for SetLayerContent {
     }
 }
 
+/// Contenu du document qui change quand on le redimensionne.
+pub struct DocState {
+    pub size: crate::Size,
+    pub layers: Vec<crate::Layer>,
+    pub guides: Vec<crate::Guide>,
+    pub selection: Option<TileGrid>,
+}
+
+/// Remplace d'un bloc taille, calques, repères et sélection (redimensionnement de l'image). Annuler restitue l'état
+/// d'avant ; les tuiles non touchées sont partagées (`Arc`), l'historique ne copie donc pas tout deux fois.
+pub struct ReplaceDocState {
+    name: String,
+    state: Option<DocState>,
+}
+
+impl ReplaceDocState {
+    pub fn new(name: impl Into<String>, state: DocState) -> Self {
+        Self { name: name.into(), state: Some(state) }
+    }
+
+    fn swap(&mut self, doc: &mut Document) {
+        if let Some(s) = self.state.take() {
+            let old = DocState {
+                size: doc.size(),
+                layers: std::mem::replace(&mut doc.layers, s.layers),
+                guides: std::mem::replace(&mut doc.guides, s.guides),
+                selection: std::mem::replace(&mut doc.selection, s.selection),
+            };
+            doc.set_size(s.size);
+            self.state = Some(old);
+        }
+    }
+}
+
+impl Command for ReplaceDocState {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn apply(&mut self, doc: &mut Document) -> Result<(), CoreError> {
+        self.swap(doc);
+        Ok(())
+    }
+
+    fn revert(&mut self, doc: &mut Document) -> Result<(), CoreError> {
+        self.swap(doc);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

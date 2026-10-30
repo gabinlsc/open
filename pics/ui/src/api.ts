@@ -14,6 +14,7 @@ import type { KeymapDto } from "./gen/KeymapDto";
 import type { LayerDto } from "./gen/LayerDto";
 import type { LayerPropsDto } from "./gen/LayerPropsDto";
 import type { OpenResult } from "./gen/OpenResult";
+import type { PaintOptionsDto } from "./gen/PaintOptionsDto";
 import type { ResolvedTheme } from "./gen/ResolvedTheme";
 import type { SettingsDto } from "./gen/SettingsDto";
 import type { StyleDto } from "./gen/StyleDto";
@@ -23,7 +24,7 @@ import type { TransformDto } from "./gen/TransformDto";
 import type { Tool } from "./gen/Tool";
 import type { ToolOptionsDto } from "./gen/ToolOptionsDto";
 
-export type { AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
+export type { AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, PaintOptionsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
 
 /** Erreur typée côté TS : `code` est stable, `message` est affichable tel quel. */
 export class CommandError extends Error {
@@ -94,6 +95,7 @@ export const api = {
   toolFinish: () => call<Snapshot>("tool_finish"),
   toolCancel: () => call<Snapshot>("tool_cancel"),
   setToolOptions: (options: ToolOptionsDto) => call<Snapshot>("tool_options_set", { options }),
+  setPaintOptions: (options: PaintOptionsDto) => call<Snapshot>("paint_options_set", { options }),
   setPanModifier: (held: boolean) => call<void>("pan_modifier_set", { held }),
   setTheme: (choice: ThemeChoice, resolved: ResolvedTheme) => call<void>("theme_set", { choice, resolved }),
   keymap: () => call<KeymapDto>("keymap_get"),

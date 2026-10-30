@@ -2,6 +2,9 @@
 //! `TileGrid` qui partage ses tuiles inchangées avec l'ancienne ; l'appelant en déduit la
 //! commande d'historique (`ReplaceTiles::between`).
 
+pub mod brush;
+pub mod fill;
+pub mod retouch;
 pub mod selection;
 pub mod transform;
 

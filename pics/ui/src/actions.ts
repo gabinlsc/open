@@ -146,6 +146,28 @@ export const ACTIONS: Record<string, ActionDef> = {
   "tool.wand": { label: "Baguette magique", run: () => void st().run(() => api.setTool("magic_wand")) },
   "tool.finish": { label: "Valider la forme en cours", run: () => void st().run(api.toolFinish) },
   "tool.cancel": { label: "Annuler la forme en cours", run: () => void st().run(api.toolCancel) },
+  "tool.brush": { label: "Pinceau", run: () => void st().run(() => api.setTool("brush")) },
+  "tool.pencil": { label: "Crayon", run: () => void st().run(() => api.setTool("pencil")) },
+  "tool.eraser": { label: "Gomme", run: () => void st().run(() => api.setTool("eraser")) },
+  "tool.gradient": { label: "Dégradé", run: () => void st().run(() => api.setTool("gradient")) },
+  "tool.bucket": { label: "Pot de peinture", run: () => void st().run(() => api.setTool("bucket")) },
+  "tool.clone": { label: "Tampon de duplication", run: () => void st().run(() => api.setTool("clone_stamp")) },
+  "tool.heal": { label: "Correcteur", run: () => void st().run(() => api.setTool("heal")) },
+  "tool.spot_heal": { label: "Correcteur localisé", run: () => void st().run(() => api.setTool("spot_heal")) },
+  "tool.patch": { label: "Pièce", run: () => void st().run(() => api.setTool("patch")) },
+  "tool.blur": { label: "Goutte d'eau (flou)", run: () => void st().run(() => api.setTool("blur")) },
+  "tool.sharpen": { label: "Netteté", run: () => void st().run(() => api.setTool("sharpen")) },
+  "tool.smudge": { label: "Doigt", run: () => void st().run(() => api.setTool("smudge")) },
+  "tool.dodge": { label: "Densité −", run: () => void st().run(() => api.setTool("dodge")) },
+  "tool.burn": { label: "Densité +", run: () => void st().run(() => api.setTool("burn")) },
+  "tool.sponge": { label: "Éponge", run: () => void st().run(() => api.setTool("sponge")) },
+  "paint.swap_colors": {
+    label: "Permuter les couleurs",
+    run: () => {
+      const o = st().snapshot?.paintOptions;
+      if (o) void st().run(() => api.setPaintOptions({ ...o, foreground: o.background, background: o.foreground }));
+    },
+  },
   "tool.hand": { label: "Outil Main", run: () => void st().run(() => api.setTool("hand")) },
   "tool.zoom": { label: "Outil Zoom", run: () => void st().run(() => api.setTool("zoom")) },
 };

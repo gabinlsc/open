@@ -251,12 +251,15 @@ impl TileGrid {
         let mut out = Vec::new();
         for (k, old) in &self.tiles {
             match other.tiles.get(k) {
-                Some(new) if Arc::ptr_eq(old, new) => {}
+                // Même `Arc`, ou contenu identique : rien à retenir (un traitement qui ne change aucun
+                // pixel ne doit pas créer d'état d'historique).
+                Some(new) if Arc::ptr_eq(old, new) || old == new => {}
+                None if **old == Tile::Uniform([0; 4]) => {}
                 new => out.push((*k, Some(old.clone()), new.cloned())),
             }
         }
         for (k, new) in &other.tiles {
-            if !self.tiles.contains_key(k) {
+            if !self.tiles.contains_key(k) && **new != Tile::Uniform([0; 4]) {
                 out.push((*k, None, Some(new.clone())));
             }
         }
@@ -318,6 +321,22 @@ mod tests {
         let k0 = TileKey { tx: 0, ty: 0 };
         assert!(Arc::ptr_eq(a.tile(k0).unwrap(), b.tile(k0).unwrap()));
         assert_eq!(a.changed_tiles(&b).len(), 1);
+    }
+
+    #[test]
+    fn changed_tiles_compares_content_when_identity_differs() {
+        let a = TileGrid::from_rgba8(300, 300, &gradient(300, 300)).unwrap();
+        // Même contenu reconstruit : tuiles distinctes en mémoire, mais aucune différence réelle.
+        let b = TileGrid::from_rgba8(300, 300, &gradient(300, 300)).unwrap();
+        assert!(a.changed_tiles(&b).is_empty());
+        let mut c = b.clone();
+        c.put_pixel(1, 1, [9, 9, 9, 9]);
+        assert_eq!(a.changed_tiles(&c).len(), 1);
+        // Une tuile transparente explicite équivaut à une tuile absente.
+        let mut d = TileGrid::new(300, 300).unwrap();
+        d.set_tile(TileKey { tx: 0, ty: 0 }, Some(Arc::new(Tile::Uniform([0; 4]))));
+        assert!(TileGrid::new(300, 300).unwrap().changed_tiles(&d).is_empty());
+        assert!(d.changed_tiles(&TileGrid::new(300, 300).unwrap()).is_empty());
     }
 
     #[test]

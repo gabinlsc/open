@@ -68,3 +68,8 @@ export const WandIcon = () => (
     <path d="M6 5v3M4.5 6.5h3" />
   </svg>
 );
+
+/** Pictogramme textuel : pour les outils qui n'ont pas encore de dessin dédié. */
+export const Glyph = ({ children }: { children: string }) => (
+  <span aria-hidden="true" style={{ fontSize: 18, lineHeight: 1 }}>{children}</span>
+);

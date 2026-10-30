@@ -184,6 +184,7 @@ pub fn run() {
             commands::tool_finish,
             commands::tool_cancel,
             commands::tool_options_set,
+            commands::paint_options_set,
             commands::pan_modifier_set,
             commands::theme_set,
             commands::keymap_get,

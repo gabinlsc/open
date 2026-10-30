@@ -40,6 +40,7 @@ struct DocEntry {
     active_layer: Option<LayerId>,
 }
 
+mod paint;
 mod tools;
 pub use tools::Pointer;
 
@@ -54,6 +55,11 @@ pub struct Session {
     pub tool: Tool,
     tool_options: crate::dto::ToolOptionsDto,
     drag: Option<tools::Drag>,
+    paint: crate::dto::PaintOptionsDto,
+    stroke: Option<paint::ActiveStroke>,
+    /// Source du tampon et du correcteur (Alt + clic) et décalage source − destination une fois fixé.
+    clone_source: Option<(f64, f64)>,
+    clone_offset: Option<(f32, f32)>,
     selection_preview: Option<TileGrid>,
     pub pan_modifier: bool,
     preview_guide: Option<(Axis, f64)>,
@@ -84,6 +90,10 @@ impl Session {
             tool: Tool::Hand,
             tool_options: crate::dto::ToolOptionsDto::default(),
             drag: None,
+            paint: crate::dto::PaintOptionsDto::default(),
+            stroke: None,
+            clone_source: None,
+            clone_offset: None,
             selection_preview: None,
             pan_modifier: false,
             preview_guide: None,
@@ -643,6 +653,7 @@ impl Session {
             blend_modes: blend_infos(),
             has_selection: self.entry().is_ok_and(|e| e.doc.selection.is_some()),
             tool_options: self.tool_options,
+            paint_options: self.paint.clone(),
             history,
             can_undo,
             can_redo,

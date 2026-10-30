@@ -8,8 +8,8 @@ use tauri::State;
 
 use super::Shared;
 use crate::dto::{
-    AppStatus, AxisDto, CanvasRect, GuideDrag, ImageOp, KeymapDto, LayerPropsDto, OpenResult, ResolvedTheme,
-    SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto,
+    AppStatus, AxisDto, CanvasRect, GuideDrag, ImageOp, KeymapDto, LayerPropsDto, OpenResult, PaintOptionsDto,
+    ResolvedTheme, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto,
 };
 use crate::error::{ApiError, SessionError};
 use crate::session::Session;
@@ -308,6 +308,14 @@ pub fn tool_cancel(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
 pub fn tool_options_set(shared: State<'_, Shared>, options: ToolOptionsDto) -> ApiResult<Snapshot> {
     mutate(&shared, |s| {
         s.set_tool_options(options);
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn paint_options_set(shared: State<'_, Shared>, options: PaintOptionsDto) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| {
+        s.set_paint_options(&options);
         Ok(())
     })
 }

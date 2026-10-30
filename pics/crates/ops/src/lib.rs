@@ -37,7 +37,11 @@ impl Op {
 
 /// Applique `op` au calque et l'enregistre dans l'historique. Renvoie `false` si rien n'a changé.
 pub fn apply_to_layer(doc: &mut Document, layer: LayerId, op: Op) -> Result<bool, CoreError> {
-    let old = &doc.layer(layer)?.pixels;
+    let target = doc.layer(layer)?;
+    if target.locks.blocks_painting() {
+        return Err(CoreError::LayerLocked(target.name.clone()));
+    }
+    let old = &target.pixels;
     let new = op.run(old)?;
     let Some(cmd) = ReplaceTiles::between(op.label(), layer, old, &new) else {
         return Ok(false);
@@ -171,6 +175,22 @@ mod tests {
         let p = src.get_pixel(1, 0);
         assert_eq!(inv.get_pixel(1, 0), [255 - p[0], 255 - p[1], 255 - p[2], p[3]]);
         assert_eq!(Op::Invert.run(&inv).unwrap().to_rgba8(), src.to_rgba8());
+    }
+
+    #[test]
+    fn locked_layers_refuse_pixel_operations() {
+        let mut doc = Document::new(DocId(1), "t", Size::new(8, 8)).unwrap();
+        let layer = doc.layers[0].id;
+        doc.layers[0].pixels.put_pixel(0, 0, [1, 2, 3, 255]);
+        for lock in [|l: &mut openpics_core::Locks| l.pixels = true, |l: &mut openpics_core::Locks| l.all = true] {
+            lock(&mut doc.layers[0].locks);
+            assert!(matches!(apply_to_layer(&mut doc, layer, Op::Invert), Err(CoreError::LayerLocked(_))));
+            doc.layers[0].locks = openpics_core::Locks::default();
+        }
+        // Le verrou de position n'empêche pas de peindre.
+        doc.layers[0].locks.position = true;
+        assert!(apply_to_layer(&mut doc, layer, Op::Invert).unwrap());
+        assert_eq!(doc.layers[0].pixels.get_pixel(0, 0), [254, 253, 252, 255]);
     }
 
     #[test]

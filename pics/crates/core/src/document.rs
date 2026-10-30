@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::blend::BlendMode;
 use crate::error::CoreError;
 use crate::geom::Size;
 use crate::history::{Command, History};
@@ -28,14 +29,113 @@ pub struct Guide {
     pub position: f64,
 }
 
-/// Phase 1 : un calque raster unique. Les autres types (groupe, réglage, texte…) arrivent en
-/// phase 2 en transformant ce struct en enum, sans changer `TileGrid` ni l'historique.
+/// Verrous d'un calque. `all` interdit toute modification ; `pixels` interdit de peindre ;
+/// `position` interdit de déplacer ou transformer (appliqué par les outils de transformation).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Locks {
+    pub pixels: bool,
+    pub position: bool,
+    pub all: bool,
+}
+
+impl Locks {
+    pub fn blocks_painting(&self) -> bool {
+        self.pixels || self.all
+    }
+
+    pub fn blocks_moving(&self) -> bool {
+        self.position || self.all
+    }
+}
+
+/// Masque de calque : la valeur est le canal rouge (0 = caché, 255 = visible). Une tuile absente
+/// vaut donc « caché » ; un masque « tout révéler » est fait de tuiles uniformes blanches.
+#[derive(Debug, Clone)]
+pub struct Mask {
+    pub pixels: TileGrid,
+    pub enabled: bool,
+}
+
+/// Propriétés d'un calque hors pixels : c'est ce qu'enregistre `SetLayerProps` pour l'historique.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LayerProps {
+    pub name: String,
+    pub visible: bool,
+    /// 0..=1. Multiplie l'alpha du calque *et* de ses styles.
+    pub opacity: f32,
+    /// 0..=1. Multiplie l'alpha du contenu seulement : les styles (ombre, contour…) n'en dépendent pas.
+    pub fill: f32,
+    pub blend: BlendMode,
+    pub locks: Locks,
+    /// Les calques d'un même groupe de liaison se déplacent ensemble.
+    pub link: Option<u64>,
+    /// Écrêtage : le calque n'apparaît que là où le calque non écrêté situé dessous est opaque.
+    pub clip_to_below: bool,
+}
+
+/// Calque raster. Les groupes, réglages, textes et objets dynamiques arrivent ensuite en
+/// généralisant le contenu, sans toucher à `TileGrid` ni à l'historique.
 #[derive(Debug, Clone)]
 pub struct Layer {
     pub id: LayerId,
     pub name: String,
     pub visible: bool,
+    pub opacity: f32,
+    pub fill: f32,
+    pub blend: BlendMode,
+    pub locks: Locks,
+    pub link: Option<u64>,
+    pub clip_to_below: bool,
+    pub mask: Option<Mask>,
     pub pixels: TileGrid,
+}
+
+impl Layer {
+    pub fn new(id: LayerId, name: impl Into<String>, pixels: TileGrid) -> Self {
+        Self {
+            id,
+            name: name.into(),
+            visible: true,
+            opacity: 1.0,
+            fill: 1.0,
+            blend: BlendMode::Normal,
+            locks: Locks::default(),
+            link: None,
+            clip_to_below: false,
+            mask: None,
+            pixels,
+        }
+    }
+
+    pub fn props(&self) -> LayerProps {
+        LayerProps {
+            name: self.name.clone(),
+            visible: self.visible,
+            opacity: self.opacity,
+            fill: self.fill,
+            blend: self.blend,
+            locks: self.locks,
+            link: self.link,
+            clip_to_below: self.clip_to_below,
+        }
+    }
+
+    /// Applique des propriétés en bornant opacité et remplissage : une valeur hors de 0..=1 (ou NaN)
+    /// ne doit jamais produire un alpha invalide au rendu.
+    pub fn set_props(&mut self, p: &LayerProps) {
+        self.name = p.name.clone();
+        self.visible = p.visible;
+        self.opacity = clamp_unit(p.opacity);
+        self.fill = clamp_unit(p.fill);
+        self.blend = p.blend;
+        self.locks = p.locks;
+        self.link = p.link;
+        self.clip_to_below = p.clip_to_below;
+    }
+}
+
+fn clamp_unit(v: f32) -> f32 {
+    if v.is_nan() { 1.0 } else { v.clamp(0.0, 1.0) }
 }
 
 #[derive(Debug)]
@@ -43,6 +143,7 @@ pub struct Document {
     pub id: DocId,
     pub name: String,
     pub path: Option<PathBuf>,
+    size: Size,
     pub layers: Vec<Layer>,
     pub guides: Vec<Guide>,
     history: History,
@@ -58,6 +159,7 @@ impl Document {
             id,
             name: name.into(),
             path: None,
+            size,
             layers: Vec::new(),
             guides: Vec::new(),
             history: History::default(),
@@ -68,8 +170,9 @@ impl Document {
         Ok(doc)
     }
 
+    /// Taille du canevas, indépendante des calques : supprimer tous les calques ne la change pas.
     pub fn size(&self) -> Size {
-        self.layers.first().map_or(Size::default(), |l| Size::new(l.pixels.width(), l.pixels.height()))
+        self.size
     }
 
     pub fn alloc_id(&mut self) -> u64 {
@@ -80,7 +183,7 @@ impl Document {
 
     pub fn add_layer(&mut self, name: impl Into<String>, pixels: TileGrid) -> LayerId {
         let id = LayerId(self.alloc_id());
-        self.layers.push(Layer { id, name: name.into(), visible: true, pixels });
+        self.layers.push(Layer::new(id, name, pixels));
         id
     }
 
@@ -104,6 +207,7 @@ impl Document {
             id: self.id,
             name: self.name.clone(),
             path: None,
+            size: self.size,
             layers: self.layers.clone(),
             guides: self.guides.clone(),
             history: History::default(),
@@ -176,33 +280,10 @@ impl Document {
         }
     }
 
-    /// Aplatit les calques visibles (de bas en haut, « normal ») en RGBA 8 bits non prémultiplié.
+    /// Aplatit le document (modes de fusion, opacité, masques, écrêtage) en RGBA 8 bits non prémultiplié.
     pub fn flatten_rgba8(&self) -> Vec<u8> {
-        let size = self.size();
-        let mut out = vec![0u8; size.width as usize * size.height as usize * 4];
-        for layer in self.layers.iter().filter(|l| l.visible) {
-            let src = layer.pixels.to_rgba8();
-            for (d, s) in out.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
-                over(d, s);
-            }
-        }
-        out
+        crate::composite::flatten_rgba8(self)
     }
-}
-
-/// Opérateur « over » sur alpha non prémultiplié.
-fn over(dst: &mut [u8], src: &[u8]) {
-    let sa = f32::from(src[3]) / 255.0;
-    if sa <= 0.0 {
-        return;
-    }
-    let da = f32::from(dst[3]) / 255.0;
-    let oa = sa + da * (1.0 - sa);
-    for c in 0..3 {
-        let v = (f32::from(src[c]) * sa + f32::from(dst[c]) * da * (1.0 - sa)) / oa;
-        dst[c] = v.round().clamp(0.0, 255.0) as u8;
-    }
-    dst[3] = (oa * 255.0).round().clamp(0.0, 255.0) as u8;
 }
 
 #[cfg(test)]

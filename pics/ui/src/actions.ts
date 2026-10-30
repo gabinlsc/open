@@ -62,6 +62,16 @@ function cycleTab(step: number): void {
   if (next) void st().run(() => api.docActivate(next.id));
 }
 
+function activeLayer() {
+  const snap = st().snapshot;
+  return snap?.layers.find((l) => l.id === snap.activeLayerId) ?? null;
+}
+const canAddMask = () => activeLayer() !== null && !activeLayer()?.hasMask;
+function maskAdd(reveal: boolean): void {
+  const layer = activeLayer();
+  if (layer) void st().run(() => api.maskAdd(layer.id, reveal));
+}
+
 const imageOp = (op: ImageOp) => () => void st().run(() => api.op(op));
 const toggle = (key: "showRulers" | "showGrid" | "showGuides" | "snapEnabled") => () => {
   const s = st().snapshot?.settings;
@@ -108,6 +118,17 @@ export const ACTIONS: Record<string, ActionDef> = {
     run: () => void st().run(api.guidesClear),
     enabled: () => (st().snapshot?.guides.length ?? 0) > 0,
   },
+  "layer.new": { label: "Nouveau calque", run: () => void st().run(api.layerAdd), enabled: hasDoc },
+  "layer.delete": {
+    label: "Supprimer le calque",
+    run: () => {
+      const id = st().snapshot?.activeLayerId;
+      if (id != null) void st().run(() => api.layerRemove(id));
+    },
+    enabled: () => (st().snapshot?.layers.length ?? 0) > 1,
+  },
+  "layer.mask_reveal": { label: "Ajouter un masque (tout révéler)", run: () => maskAdd(true), enabled: canAddMask },
+  "layer.mask_hide": { label: "Ajouter un masque (tout masquer)", run: () => maskAdd(false), enabled: canAddMask },
   "tab.next": { label: "Onglet suivant", run: () => cycleTab(1) },
   "tab.prev": { label: "Onglet précédent", run: () => cycleTab(-1) },
   "tool.hand": { label: "Outil Main", run: () => void st().run(() => api.setTool("hand")) },

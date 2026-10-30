@@ -5,17 +5,20 @@
 
 use std::path::{Path, PathBuf};
 
-use openpics_core::commands::{AddGuide, ClearGuides, RemoveGuide};
+use openpics_core::commands::{
+    AddGuide, AddLayer, AddMask, ClearGuides, MoveLayer, RemoveGuide, RemoveLayer, RemoveMask, SetLayerProps,
+    SetMaskEnabled,
+};
 use openpics_core::shortcuts::{Chord, Keymap};
 use openpics_core::snap::snap_axis;
 use openpics_core::view::next_zoom_step;
-use openpics_core::{Axis, DocId, Document, Size, Vec2, ViewSettings, Viewport};
+use openpics_core::{Axis, DocId, Document, Layer, LayerId, Size, TileGrid, Vec2, ViewSettings, Viewport};
 use openpics_io::ExportOptions;
 use openpics_ops::Op;
 
 use crate::dto::{
-    DocSummary, GuideDrag, GuideDto, HistoryDto, ImageOp, KeymapDto, ResolvedTheme, SettingsDto, Snapshot, Tool,
-    ViewState,
+    DocSummary, GuideDrag, GuideDto, HistoryDto, ImageOp, KeymapDto, LayerDto, LayerPropsDto, ResolvedTheme,
+    SettingsDto, Snapshot, Tool, ViewState, blend_infos,
 };
 use crate::error::SessionError;
 
@@ -33,6 +36,7 @@ struct DocEntry {
     doc: Document,
     viewport: Viewport,
     fitted: bool,
+    active_layer: Option<LayerId>,
 }
 
 pub struct Session {
@@ -99,7 +103,8 @@ impl Session {
 
     fn insert(&mut self, doc: Document) -> DocId {
         let id = doc.id;
-        self.docs.push(DocEntry { doc, viewport: Viewport::default(), fitted: false });
+        let active_layer = doc.layers.last().map(|l| l.id);
+        self.docs.push(DocEntry { doc, viewport: Viewport::default(), fitted: false, active_layer });
         self.active = Some(id);
         self.preview_guide = None;
         self.ensure_fitted();
@@ -356,10 +361,90 @@ impl Session {
             ImageOp::FlipVertical => Op::FlipVertical,
             ImageOp::Invert => Op::Invert,
         };
-        let doc = &mut self.entry_mut()?.doc;
-        // Phase 1 : un seul calque, le fond. La sélection du calque actif arrive avec la phase 2.
-        let layer = doc.layers.first().map(|l| l.id).ok_or(SessionError::NoActiveDocument)?;
-        Ok(openpics_ops::apply_to_layer(doc, layer, op)?)
+        let entry = self.entry_mut()?;
+        let layer =
+            entry.active_layer.ok_or_else(|| SessionError::InvalidArgument("aucun calque sélectionné".into()))?;
+        Ok(openpics_ops::apply_to_layer(&mut entry.doc, layer, op)?)
+    }
+
+    // ---- calques ----------------------------------------------------------------------------
+
+    pub fn layer_select(&mut self, id: u64) -> Result<(), SessionError> {
+        let e = self.entry_mut()?;
+        e.doc.layer(LayerId(id))?;
+        e.active_layer = Some(LayerId(id));
+        Ok(())
+    }
+
+    /// Nouveau calque transparent juste au-dessus du calque actif (ou tout en haut).
+    pub fn layer_add(&mut self) -> Result<u64, SessionError> {
+        let e = self.entry_mut()?;
+        let size = e.doc.size();
+        let index = e
+            .active_layer
+            .and_then(|a| e.doc.layers.iter().position(|l| l.id == a))
+            .map_or(e.doc.layers.len(), |i| i + 1);
+        let id = LayerId(e.doc.alloc_id());
+        let layer =
+            Layer::new(id, format!("Calque {}", e.doc.layers.len() + 1), TileGrid::new(size.width, size.height)?);
+        e.doc.execute(Box::new(AddLayer::new(index, layer)))?;
+        e.active_layer = Some(id);
+        Ok(id.0)
+    }
+
+    pub fn layer_remove(&mut self, id: u64) -> Result<(), SessionError> {
+        let e = self.entry_mut()?;
+        if e.doc.layers.len() <= 1 {
+            return Err(SessionError::InvalidArgument("un document doit garder au moins un calque".into()));
+        }
+        let idx = e
+            .doc
+            .layers
+            .iter()
+            .position(|l| l.id.0 == id)
+            .ok_or(SessionError::Core(openpics_core::CoreError::LayerNotFound(id)))?;
+        e.doc.execute(Box::new(RemoveLayer::new(LayerId(id))))?;
+        if e.active_layer == Some(LayerId(id)) {
+            e.active_layer = e.doc.layers.get(idx.saturating_sub(1)).map(|l| l.id);
+        }
+        Ok(())
+    }
+
+    /// `to` est l'index final dans la pile (0 = tout en bas).
+    pub fn layer_move(&mut self, id: u64, to: usize) -> Result<(), SessionError> {
+        self.entry_mut()?.doc.execute(Box::new(MoveLayer::new(LayerId(id), to)))?;
+        Ok(())
+    }
+
+    pub fn layer_set_props(&mut self, id: u64, props: &LayerPropsDto) -> Result<(), SessionError> {
+        let e = self.entry_mut()?;
+        let current = e.doc.layer(LayerId(id))?.props();
+        let next = props
+            .apply_to(&current)
+            .ok_or_else(|| SessionError::InvalidArgument(format!("mode de fusion inconnu : {}", props.blend)))?;
+        if next.name.is_empty() {
+            return Err(SessionError::InvalidArgument("le nom d'un calque ne peut pas être vide".into()));
+        }
+        if next == current {
+            return Ok(());
+        }
+        e.doc.execute(Box::new(SetLayerProps::new(describe_change(&current, &next), LayerId(id), next)))?;
+        Ok(())
+    }
+
+    pub fn mask_add(&mut self, id: u64, reveal: bool) -> Result<(), SessionError> {
+        self.entry_mut()?.doc.execute(Box::new(AddMask::new(LayerId(id), reveal)))?;
+        Ok(())
+    }
+
+    pub fn mask_remove(&mut self, id: u64) -> Result<(), SessionError> {
+        self.entry_mut()?.doc.execute(Box::new(RemoveMask::new(LayerId(id))))?;
+        Ok(())
+    }
+
+    pub fn mask_set_enabled(&mut self, id: u64, enabled: bool) -> Result<(), SessionError> {
+        self.entry_mut()?.doc.execute(Box::new(SetMaskEnabled::new(LayerId(id), enabled)))?;
+        Ok(())
     }
 
     // ---- raccourcis -------------------------------------------------------------------------
@@ -409,17 +494,19 @@ impl Session {
                 }
             })
             .collect();
-        let (guides, history, can_undo, can_redo) = match self.entry() {
+        let (guides, layers, active_layer_id, history, can_undo, can_redo) = match self.entry() {
             Ok(e) => {
                 let (names, position) = e.doc.history().entries();
                 (
                     e.doc.guides.iter().map(GuideDto::from).collect(),
+                    e.doc.layers.iter().rev().map(LayerDto::from).collect(),
+                    e.active_layer.map(|l| l.0),
                     HistoryDto { names, position },
                     e.doc.history().can_undo(),
                     e.doc.history().can_redo(),
                 )
             }
-            Err(_) => (Vec::new(), HistoryDto { names: Vec::new(), position: 0 }, false, false),
+            Err(_) => (Vec::new(), Vec::new(), None, HistoryDto { names: Vec::new(), position: 0 }, false, false),
         };
         let vp = self.viewport();
         Snapshot {
@@ -433,12 +520,34 @@ impl Session {
                 canvas_height: self.canvas.height,
             },
             guides,
+            layers,
+            active_layer_id,
+            blend_modes: blend_infos(),
             history,
             can_undo,
             can_redo,
             settings: SettingsDto::from(self.settings),
             tool: self.tool,
         }
+    }
+}
+
+/// Libellé d'historique lisible : ce qui a réellement changé.
+fn describe_change(a: &openpics_core::LayerProps, b: &openpics_core::LayerProps) -> String {
+    if a.blend != b.blend {
+        format!("Mode de fusion : {}", b.blend.label())
+    } else if a.opacity != b.opacity {
+        format!("Opacité : {} %", (b.opacity * 100.0).round())
+    } else if a.fill != b.fill {
+        format!("Remplissage : {} %", (b.fill * 100.0).round())
+    } else if a.visible != b.visible {
+        (if b.visible { "Afficher le calque" } else { "Masquer le calque" }).to_owned()
+    } else if a.clip_to_below != b.clip_to_below {
+        (if b.clip_to_below { "Créer un masque d'écrêtage" } else { "Libérer le masque d'écrêtage" }).to_owned()
+    } else if a.locks != b.locks {
+        "Verrouillage du calque".to_owned()
+    } else {
+        "Renommer le calque".to_owned()
     }
 }
 
@@ -659,5 +768,116 @@ mod tests {
         assert!(matches!(s.undo(), Err(SessionError::NoActiveDocument)));
         assert!(matches!(s.save_active(None), Err(SessionError::NoActiveDocument)));
         assert!(s.cursor_to_doc(Vec2::new(1.0, 1.0)).is_none());
+    }
+
+    fn props(s: &Session) -> LayerPropsDto {
+        let l = &s.snapshot().layers[0];
+        LayerPropsDto {
+            name: l.name.clone(),
+            visible: l.visible,
+            opacity: l.opacity,
+            fill: l.fill,
+            blend: l.blend.clone(),
+            locks: l.locks,
+            clip_to_below: l.clip_to_below,
+        }
+    }
+
+    #[test]
+    fn layers_are_listed_top_first_with_an_active_layer() {
+        let mut s = session();
+        s.new_document(None, 20, 20).unwrap();
+        let snap = s.snapshot();
+        assert_eq!(snap.layers.len(), 1);
+        assert_eq!(snap.active_layer_id, Some(snap.layers[0].id));
+        let new = s.layer_add().unwrap();
+        let snap = s.snapshot();
+        assert_eq!(snap.layers[0].id, new, "le nouveau calque est tout en haut");
+        assert_eq!(snap.active_layer_id, Some(new));
+        assert_eq!(snap.blend_modes.len(), 27);
+    }
+
+    #[test]
+    fn layer_edits_go_through_history_with_readable_names() {
+        let mut s = session();
+        s.new_document(None, 20, 20).unwrap();
+        s.layer_add().unwrap();
+        let id = s.snapshot().layers[0].id;
+        let mut p = props(&s);
+        p.blend = "multiply".into();
+        s.layer_set_props(id, &p).unwrap();
+        p.opacity = 0.5;
+        s.layer_set_props(id, &p).unwrap();
+        let names = s.snapshot().history.names;
+        assert_eq!(&names[names.len() - 2..], ["Mode de fusion : Produit", "Opacité : 50 %"]);
+        s.undo().unwrap();
+        assert_eq!(s.snapshot().layers[0].opacity, 1.0);
+        s.undo().unwrap();
+        assert_eq!(s.snapshot().layers[0].blend, "normal");
+        // Aucun changement = aucun état d'historique.
+        let before = s.snapshot().history.names.len();
+        s.layer_set_props(id, &props(&s)).unwrap();
+        assert_eq!(s.snapshot().history.names.len(), before);
+    }
+
+    #[test]
+    fn invalid_layer_edits_are_refused() {
+        let mut s = session();
+        s.new_document(None, 20, 20).unwrap();
+        let id = s.snapshot().layers[0].id;
+        let mut p = props(&s);
+        p.blend = "inconnu".into();
+        assert!(matches!(s.layer_set_props(id, &p), Err(SessionError::InvalidArgument(_))));
+        p.blend = "normal".into();
+        p.name = "   ".into();
+        assert!(matches!(s.layer_set_props(id, &p), Err(SessionError::InvalidArgument(_))));
+        assert!(s.layer_set_props(9999, &props(&s)).is_err());
+        assert!(matches!(s.layer_remove(id), Err(SessionError::InvalidArgument(_))), "on garde au moins un calque");
+    }
+
+    #[test]
+    fn removing_the_active_layer_selects_a_neighbour_and_undo_restores() {
+        let mut s = session();
+        s.new_document(None, 20, 20).unwrap();
+        let bottom = s.snapshot().layers[0].id;
+        let top = s.layer_add().unwrap();
+        s.layer_remove(top).unwrap();
+        assert_eq!(s.snapshot().active_layer_id, Some(bottom));
+        s.undo().unwrap();
+        assert_eq!(s.snapshot().layers[0].id, top);
+        s.layer_move(top, 0).unwrap();
+        assert_eq!(s.snapshot().layers[1].id, top, "déplacé tout en bas");
+    }
+
+    #[test]
+    fn masks_and_locks_work_through_the_session() {
+        let mut s = session();
+        s.new_document(None, 20, 20).unwrap();
+        let id = s.snapshot().layers[0].id;
+        s.mask_add(id, true).unwrap();
+        assert!(s.snapshot().layers[0].has_mask && s.snapshot().layers[0].mask_enabled);
+        assert!(s.mask_add(id, true).is_err());
+        s.mask_set_enabled(id, false).unwrap();
+        assert!(!s.snapshot().layers[0].mask_enabled);
+        s.mask_remove(id).unwrap();
+        assert!(!s.snapshot().layers[0].has_mask);
+        let mut p = props(&s);
+        p.locks.pixels = true;
+        s.layer_set_props(id, &p).unwrap();
+        let err = s.apply_op(ImageOp::Invert).unwrap_err().to_string();
+        assert!(err.contains("verrouillé"), "{err}");
+    }
+
+    #[test]
+    fn operations_apply_to_the_selected_layer_only() {
+        let mut s = session();
+        s.new_document(None, 4, 4).unwrap();
+        let bottom = s.snapshot().layers[0].id;
+        s.layer_add().unwrap();
+        s.layer_select(bottom).unwrap();
+        assert!(s.apply_op(ImageOp::Invert).unwrap());
+        let doc = s.render_state().document.unwrap();
+        assert_eq!(doc.layers[0].pixels.get_pixel(0, 0), [0, 0, 0, 255]);
+        assert_eq!(doc.layers[1].pixels.tile_count(), 0);
     }
 }

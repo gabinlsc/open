@@ -1,5 +1,6 @@
 import { api } from "../api";
 import { activeDoc, useStore } from "../store";
+import { LayerPanel } from "./LayerPanel";
 
 export function Sidebar() {
   const snapshot = useStore((s) => s.snapshot);
@@ -22,6 +23,7 @@ export function Sidebar() {
           <p className="muted">Aucun document.</p>
         )}
       </section>
+      <LayerPanel />
       <section aria-labelledby="p-hist">
         <h3 id="p-hist">Historique</h3>
         {history.names.length === 0 ? (

@@ -5,11 +5,14 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { AppStatus } from "./gen/AppStatus";
 import type { ApiError } from "./gen/ApiError";
 import type { AxisDto } from "./gen/AxisDto";
+import type { BlendInfo } from "./gen/BlendInfo";
 import type { CanvasRect } from "./gen/CanvasRect";
 import type { CursorEvent } from "./gen/CursorEvent";
 import type { GuideDrag } from "./gen/GuideDrag";
 import type { ImageOp } from "./gen/ImageOp";
 import type { KeymapDto } from "./gen/KeymapDto";
+import type { LayerDto } from "./gen/LayerDto";
+import type { LayerPropsDto } from "./gen/LayerPropsDto";
 import type { OpenResult } from "./gen/OpenResult";
 import type { ResolvedTheme } from "./gen/ResolvedTheme";
 import type { SettingsDto } from "./gen/SettingsDto";
@@ -17,7 +20,7 @@ import type { Snapshot } from "./gen/Snapshot";
 import type { ThemeChoice } from "./gen/ThemeChoice";
 import type { Tool } from "./gen/Tool";
 
-export type { AppStatus, ApiError, AxisDto, CursorEvent, ImageOp, KeymapDto, SettingsDto, Snapshot, ThemeChoice, Tool, ResolvedTheme };
+export type { AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, SettingsDto, Snapshot, ThemeChoice, Tool, ResolvedTheme };
 
 /** Erreur typée côté TS : `code` est stable, `message` est affichable tel quel. */
 export class CommandError extends Error {
@@ -63,6 +66,14 @@ export const api = {
   guideCancel: () => call<void>("guide_cancel"),
   guideRemove: (id: number) => call<Snapshot>("guide_remove", { id }),
   guidesClear: () => call<Snapshot>("guides_clear"),
+  layerSelect: (id: number) => call<Snapshot>("layer_select", { id }),
+  layerAdd: () => call<Snapshot>("layer_add"),
+  layerRemove: (id: number) => call<Snapshot>("layer_remove", { id }),
+  layerMove: (id: number, to: number) => call<Snapshot>("layer_move", { id, to }),
+  layerSetProps: (id: number, props: LayerPropsDto) => call<Snapshot>("layer_set_props", { id, props }),
+  maskAdd: (id: number, reveal: boolean) => call<Snapshot>("mask_add", { id, reveal }),
+  maskRemove: (id: number) => call<Snapshot>("mask_remove", { id }),
+  maskSetEnabled: (id: number, enabled: boolean) => call<Snapshot>("mask_set_enabled", { id, enabled }),
   undo: () => call<Snapshot>("history_undo"),
   redo: () => call<Snapshot>("history_redo"),
   op: (op: ImageOp) => call<Snapshot>("op_apply", { op }),

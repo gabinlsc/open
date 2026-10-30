@@ -1,0 +1,7 @@
+target/
+ui/node_modules/
+ui/dist/
+# Schémas générés par tauri-build
+crates/app/gen/
+*.tmp
+*.openpics-tmp

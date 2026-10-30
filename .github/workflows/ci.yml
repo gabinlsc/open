@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    working-directory: pics
+
+jobs:
+  rust:
+    name: Rust (Linux : fmt, clippy, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pics
+      # Rasteriseur Vulkan logiciel (lavapipe) : permet d'exécuter les tests de rendu sans GPU.
+      - name: Pilote graphique logiciel
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers libvulkan1
+      - run: cargo fmt --all --check
+      # L'app Tauri n'est lintée ici que pour sa logique ; la coque l'est dans le job Windows.
+      - run: cargo clippy --workspace --exclude openpics-app --all-targets -- -D warnings
+      - run: cargo clippy -p openpics-app --no-default-features --all-targets -- -D warnings
+      - name: Tests (le GPU logiciel est obligatoire : pas de test de rendu « vert » car ignoré)
+        run: cargo test --workspace --exclude openpics-app
+        env:
+          OPENPICS_REQUIRE_GPU: "1"
+      - run: cargo test -p openpics-app --no-default-features
+      - name: Les types TypeScript générés sont à jour
+        run: git diff --exit-code -- ui/src/gen
+
+  licenses:
+    name: Licences des dépendances
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: pics/Cargo.toml
+          command: check licenses bans sources
+
+  ui:
+    name: Interface (typecheck, tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pics/ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pics/ui/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  windows:
+    name: Windows (build, installeurs, portable)
+    runs-on: windows-latest
+    needs: [rust, ui]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pics
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pics/ui/package-lock.json
+      - run: npm ci
+        working-directory: pics/ui
+      - run: cargo clippy -p openpics-app --all-targets -- -D warnings
+      - name: Installeurs NSIS et MSI
+        working-directory: pics/crates/app
+        run: ../../ui/node_modules/.bin/tauri build
+      # Signature : emplacement réservé. Sans les secrets, les binaires restent non signés et la page
+      # de téléchargement le dit. À brancher sur signtool ou un service de signature (azure/trusted-signing).
+      - name: Signature (emplacement réservé)
+        shell: pwsh
+        env:
+          SIGNING_CERT_B64: ${{ secrets.SIGNING_CERT_B64 }}
+        run: |
+          if ([string]::IsNullOrEmpty($env:SIGNING_CERT_B64)) {
+            Write-Host "Aucun certificat de signature configuré : binaires non signés."
+          } else {
+            Write-Host "Certificat présent : brancher ici signtool sur target/release/bundle/**."
+          }
+      - name: Version portable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path portable/OpenPics | Out-Null
+          Copy-Item target/release/openpics.exe portable/OpenPics/OpenPics.exe
+          # Le fichier « portable » range les préférences à côté de l'exécutable (data/).
+          New-Item -ItemType File -Path portable/OpenPics/portable | Out-Null
+          Compress-Archive -Path portable/OpenPics -DestinationPath OpenPics-portable-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openpics-windows-x64
+          path: |
+            pics/target/release/bundle/nsis/*.exe
+            pics/target/release/bundle/msi/*.msi
+            pics/OpenPics-portable-x64.zip

@@ -1,0 +1,35 @@
+# Politique de licences : OpenPics est sous GPL-3.0-only ; on n'accepte que des dépendances
+# qui peuvent y être incorporées (permissives, ou copyleft faible/fort compatible GPLv3).
+[graph]
+targets = [
+  "x86_64-pc-windows-msvc",
+  "x86_64-unknown-linux-gnu",
+]
+
+[licenses]
+confidence-threshold = 0.9
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "MPL-2.0",
+  "CC0-1.0",
+  "0BSD",
+  "GPL-3.0-only",
+]
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+# Les crates internes du workspace se référencent par chemin, sans numéro de version.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

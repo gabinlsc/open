@@ -1,0 +1,55 @@
+[package]
+name = "openpics-app"
+description = "Application OpenPics : session, commandes IPC et coque Tauri."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[lib]
+name = "openpics_app"
+
+[[bin]]
+name = "openpics"
+path = "src/main.rs"
+required-features = ["shell"]
+
+[features]
+default = ["shell"]
+# La coque (Tauri, canvas natif, rendu) exige WebView2 sous Windows ; sans elle, la logique
+# de session se teste sur n'importe quelle plateforme (`--no-default-features`).
+shell = ["dep:tauri", "dep:tauri-plugin-dialog", "dep:openpics-gpu", "dep:raw-window-handle", "dep:windows-sys"]
+
+[dependencies]
+openpics-core.workspace = true
+openpics-ops.workspace = true
+openpics-io.workspace = true
+openpics-gpu = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+ts-rs = "11"
+tauri = { version = "2", optional = true }
+tauri-plugin-dialog = { version = "2", optional = true }
+raw-window-handle = { version = "0.6", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.60", optional = true, features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_System_LibraryLoader",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

@@ -1,0 +1,23 @@
+[package]
+name = "openpics-core"
+description = "Modèle du document, tuiles, historique, vue et raccourcis (sans GPU ni E/S)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+criterion = { version = "0.7", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "tiles"
+harness = false
+
+[lints]
+workspace = true

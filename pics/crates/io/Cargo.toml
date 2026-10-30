@@ -1,0 +1,27 @@
+[package]
+name = "openpics-io"
+description = "Lecture/écriture des formats d'image et du format natif .ocv."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+openpics-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "tiff", "bmp", "gif"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile = "3"
+criterion = { version = "0.7", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "open"
+harness = false
+
+[lints]
+workspace = true

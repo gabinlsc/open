@@ -1,6 +1,7 @@
 import { api } from "../api";
 import { activeDoc, useStore } from "../store";
 import { LayerPanel } from "./LayerPanel";
+import { ToolOptions } from "./ToolOptions";
 
 export function Sidebar() {
   const snapshot = useStore((s) => s.snapshot);
@@ -23,6 +24,7 @@ export function Sidebar() {
           <p className="muted">Aucun document.</p>
         )}
       </section>
+      <ToolOptions />
       <LayerPanel />
       <section aria-labelledby="p-hist">
         <h3 id="p-hist">Historique</h3>

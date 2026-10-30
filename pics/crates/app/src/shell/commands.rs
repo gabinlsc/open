@@ -9,7 +9,7 @@ use tauri::State;
 use super::Shared;
 use crate::dto::{
     AppStatus, AxisDto, CanvasRect, GuideDrag, ImageOp, KeymapDto, LayerPropsDto, OpenResult, ResolvedTheme,
-    SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, TransformDto,
+    SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto,
 };
 use crate::error::{ApiError, SessionError};
 use crate::session::Session;
@@ -261,7 +261,53 @@ pub async fn op_apply(shared: State<'_, Shared>, op: ImageOp) -> ApiResult<Snaps
 #[tauri::command]
 pub fn tool_set(shared: State<'_, Shared>, tool: Tool) -> ApiResult<Snapshot> {
     mutate(&shared, |s| {
-        s.tool = tool;
+        s.set_tool(tool);
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn select_all(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
+    mutate(&shared, Session::select_all)
+}
+
+#[tauri::command]
+pub fn select_none(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
+    mutate(&shared, Session::deselect)
+}
+
+#[tauri::command]
+pub fn select_invert(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
+    mutate(&shared, Session::select_invert)
+}
+
+#[tauri::command]
+pub async fn select_feather(shared: State<'_, Shared>, radius: f32) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.select_feather(radius))
+}
+
+#[tauri::command]
+pub async fn select_grow(shared: State<'_, Shared>, radius: f32, grow: bool) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.select_grow(radius, grow))
+}
+
+#[tauri::command]
+pub fn tool_finish(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
+    mutate(&shared, Session::tool_finish)
+}
+
+#[tauri::command]
+pub fn tool_cancel(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| {
+        s.tool_cancel();
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn tool_options_set(shared: State<'_, Shared>, options: ToolOptionsDto) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| {
+        s.set_tool_options(options);
         Ok(())
     })
 }

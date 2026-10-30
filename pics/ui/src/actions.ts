@@ -15,6 +15,7 @@ const IMAGE_FILTERS = [
 
 const st = () => useStore.getState();
 const hasDoc = () => activeDoc(st()) !== null;
+const hasSelection = () => st().snapshot?.hasSelection ?? false;
 
 /** Ouvre des fichiers par chemin ; les échecs sont regroupés dans une seule notification. */
 export async function openPaths(paths: string[]): Promise<void> {
@@ -132,6 +133,19 @@ export const ACTIONS: Record<string, ActionDef> = {
   "layer.mask_hide": { label: "Ajouter un masque (tout masquer)", run: () => maskAdd(false), enabled: canAddMask },
   "tab.next": { label: "Onglet suivant", run: () => cycleTab(1) },
   "tab.prev": { label: "Onglet précédent", run: () => cycleTab(-1) },
+  "select.all": { label: "Tout sélectionner", run: () => void st().run(api.selectAll), enabled: hasDoc },
+  "select.none": { label: "Désélectionner", run: () => void st().run(api.selectNone), enabled: () => st().snapshot?.hasSelection ?? false },
+  "select.invert": { label: "Inverser la sélection", run: () => void st().run(api.selectInvert), enabled: hasDoc },
+  "select.feather": { label: "Contour progressif…", run: () => st().setDialog({ kind: "selectOp", op: "feather" }), enabled: hasSelection },
+  "select.grow": { label: "Agrandir…", run: () => st().setDialog({ kind: "selectOp", op: "grow" }), enabled: hasSelection },
+  "select.shrink": { label: "Contracter…", run: () => st().setDialog({ kind: "selectOp", op: "shrink" }), enabled: hasSelection },
+  "tool.rect_select": { label: "Sélection rectangulaire", run: () => void st().run(() => api.setTool("rect_select")) },
+  "tool.ellipse_select": { label: "Sélection elliptique", run: () => void st().run(() => api.setTool("ellipse_select")) },
+  "tool.lasso": { label: "Lasso", run: () => void st().run(() => api.setTool("lasso")) },
+  "tool.polygon_lasso": { label: "Lasso polygonal", run: () => void st().run(() => api.setTool("polygon_lasso")) },
+  "tool.wand": { label: "Baguette magique", run: () => void st().run(() => api.setTool("magic_wand")) },
+  "tool.finish": { label: "Valider la forme en cours", run: () => void st().run(api.toolFinish) },
+  "tool.cancel": { label: "Annuler la forme en cours", run: () => void st().run(api.toolCancel) },
   "tool.hand": { label: "Outil Main", run: () => void st().run(() => api.setTool("hand")) },
   "tool.zoom": { label: "Outil Zoom", run: () => void st().run(() => api.setTool("zoom")) },
 };

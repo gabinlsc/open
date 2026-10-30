@@ -21,8 +21,9 @@ import type { Snapshot } from "./gen/Snapshot";
 import type { ThemeChoice } from "./gen/ThemeChoice";
 import type { TransformDto } from "./gen/TransformDto";
 import type { Tool } from "./gen/Tool";
+import type { ToolOptionsDto } from "./gen/ToolOptionsDto";
 
-export type { AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, TransformDto, ResolvedTheme };
+export type { AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
 
 /** Erreur typée côté TS : `code` est stable, `message` est affichable tel quel. */
 export class CommandError extends Error {
@@ -85,6 +86,14 @@ export const api = {
   redo: () => call<Snapshot>("history_redo"),
   op: (op: ImageOp) => call<Snapshot>("op_apply", { op }),
   setTool: (tool: Tool) => call<Snapshot>("tool_set", { tool }),
+  selectAll: () => call<Snapshot>("select_all"),
+  selectNone: () => call<Snapshot>("select_none"),
+  selectInvert: () => call<Snapshot>("select_invert"),
+  selectFeather: (radius: number) => call<Snapshot>("select_feather", { radius }),
+  selectGrow: (radius: number, grow: boolean) => call<Snapshot>("select_grow", { radius, grow }),
+  toolFinish: () => call<Snapshot>("tool_finish"),
+  toolCancel: () => call<Snapshot>("tool_cancel"),
+  setToolOptions: (options: ToolOptionsDto) => call<Snapshot>("tool_options_set", { options }),
   setPanModifier: (held: boolean) => call<void>("pan_modifier_set", { held }),
   setTheme: (choice: ThemeChoice, resolved: ResolvedTheme) => call<void>("theme_set", { choice, resolved }),
   keymap: () => call<KeymapDto>("keymap_get"),

@@ -35,11 +35,34 @@ impl From<AxisDto> for Axis {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 #[ts(export)]
 pub enum Tool {
     Hand,
     Zoom,
+    RectSelect,
+    EllipseSelect,
+    Lasso,
+    PolygonLasso,
+    MagicWand,
+}
+
+/// Réglages des outils de sélection.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ToolOptionsDto {
+    /// 0..=255 : écart de couleur accepté par la baguette magique.
+    pub tolerance: u8,
+    pub contiguous: bool,
+    /// La baguette lit l'image aplatie plutôt que le calque actif.
+    pub sample_all_layers: bool,
+}
+
+impl Default for ToolOptionsDto {
+    fn default() -> Self {
+        Self { tolerance: 32, contiguous: true, sample_all_layers: false }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -180,6 +203,8 @@ pub struct Snapshot {
     #[ts(type = "number | null")]
     pub active_layer_id: Option<u64>,
     pub blend_modes: Vec<BlendInfo>,
+    pub has_selection: bool,
+    pub tool_options: ToolOptionsDto,
     pub history: HistoryDto,
     pub can_undo: bool,
     pub can_redo: bool,

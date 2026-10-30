@@ -40,6 +40,9 @@ struct DocEntry {
     active_layer: Option<LayerId>,
 }
 
+mod tools;
+pub use tools::Pointer;
+
 pub struct Session {
     docs: Vec<DocEntry>,
     active: Option<DocId>,
@@ -49,6 +52,9 @@ pub struct Session {
     pub theme: ResolvedTheme,
     pub keymap: Keymap,
     pub tool: Tool,
+    tool_options: crate::dto::ToolOptionsDto,
+    drag: Option<tools::Drag>,
+    selection_preview: Option<TileGrid>,
     pub pan_modifier: bool,
     preview_guide: Option<(Axis, f64)>,
     untitled: u32,
@@ -61,6 +67,8 @@ pub struct RenderState {
     pub settings: ViewSettings,
     pub theme: ResolvedTheme,
     pub preview_guide: Option<(Axis, f64)>,
+    /// Sélection à contourner : l'aperçu du geste en cours, sinon la sélection du document.
+    pub selection: Option<TileGrid>,
 }
 
 impl Session {
@@ -74,6 +82,9 @@ impl Session {
             theme: ResolvedTheme::Light,
             keymap,
             tool: Tool::Hand,
+            tool_options: crate::dto::ToolOptionsDto::default(),
+            drag: None,
+            selection_preview: None,
             pan_modifier: false,
             preview_guide: None,
             untitled: 0,
@@ -148,6 +159,7 @@ impl Session {
         }
         self.active = Some(DocId(id));
         self.preview_guide = None;
+        self.tool_cancel();
         self.ensure_fitted();
         Ok(())
     }
@@ -573,6 +585,10 @@ impl Session {
             settings: self.settings,
             theme: self.theme,
             preview_guide: self.preview_guide,
+            selection: self
+                .selection_preview
+                .clone()
+                .or_else(|| self.entry().ok().and_then(|e| e.doc.selection.clone())),
         }
     }
 
@@ -625,6 +641,8 @@ impl Session {
             layers,
             active_layer_id,
             blend_modes: blend_infos(),
+            has_selection: self.entry().is_ok_and(|e| e.doc.selection.is_some()),
+            tool_options: self.tool_options,
             history,
             can_undo,
             can_redo,

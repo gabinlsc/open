@@ -168,3 +168,4 @@ input[aria-invalid="true"] { border-color: var(--danger); }
 .num input, .num select { width: 100%; min-width: 0; color: var(--ink); }
 .num input[type="color"] { padding: 0; height: 26px; }
 .form label.inline { display: flex; align-items: center; gap: 6px; font-weight: 400; }
+.sidebar label.inline { display: flex; align-items: center; gap: 6px; font-weight: 400; }

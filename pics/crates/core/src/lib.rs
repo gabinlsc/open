@@ -10,6 +10,7 @@ pub mod document;
 pub mod error;
 pub mod geom;
 pub mod history;
+pub mod selection;
 pub mod shortcuts;
 pub mod snap;
 pub mod styles;

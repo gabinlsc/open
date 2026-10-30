@@ -20,15 +20,16 @@ use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, ReleaseCapture, SetCapture, VK_MENU};
 use windows_sys::Win32::UI::Shell::{DragAcceptFiles, DragFinish, DragQueryFileW, HDROP};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CREATESTRUCTW, CreateWindowExW, DefWindowProcW, GWLP_USERDATA, GetWindowLongPtrW, HWND_TOP, IDC_ARROW, IDC_CROSS,
-    IDC_HAND, IDC_SIZEALL, LoadCursorW, MA_NOACTIVATE, RegisterClassExW, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE,
-    SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SetCursor, SetWindowLongPtrW, SetWindowPos, WM_CAPTURECHANGED,
-    WM_DROPFILES, WM_ERASEBKGND, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEACTIVATE,
-    WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WM_SETCURSOR, WNDCLASSEXW, WS_CHILD,
-    WS_CLIPSIBLINGS, WS_EX_ACCEPTFILES, WS_VISIBLE,
+    CREATESTRUCTW, CreateWindowExW, DefWindowProcW, GWLP_USERDATA, GetWindowLongPtrW, HWND_TOP, IDC_CROSS, IDC_HAND,
+    IDC_SIZEALL, LoadCursorW, MA_NOACTIVATE, RegisterClassExW, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SWP_NOZORDER, SWP_SHOWWINDOW, SetCursor, SetWindowLongPtrW, SetWindowPos, WM_CAPTURECHANGED, WM_DROPFILES,
+    WM_ERASEBKGND, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE,
+    WM_MOUSEWHEEL, WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WM_SETCURSOR, WNDCLASSEXW, WS_CHILD, WS_CLIPSIBLINGS,
+    WS_EX_ACCEPTFILES, WS_VISIBLE,
 };
 
 use crate::dto::{CanvasRect, CursorEvent, Tool};
+use crate::session::Pointer;
 use crate::shell::Shared;
 use crate::shell::render::{RenderMsg, RenderThread};
 
@@ -189,11 +190,13 @@ impl Canvas {
 struct Input {
     shared: Shared,
     drag_last: Option<(i32, i32)>,
+    /// Un geste d'outil (sélection, plus tard peinture) est en cours : la souris est capturée.
+    tool_drag: bool,
 }
 
 impl Input {
     fn new(shared: Shared) -> Self {
-        Self { shared, drag_last: None }
+        Self { shared, drag_last: None, tool_drag: false }
     }
 
     fn start_drag(&mut self, hwnd: HWND, x: i32, y: i32) {
@@ -210,19 +213,15 @@ impl Input {
     }
 
     fn cursor(&self) -> *const u16 {
-        let tool_hand = self
-            .shared
-            .lock()
-            .map(|s| (s.tool == Tool::Hand || s.pan_modifier, s.tool == Tool::Zoom))
-            .unwrap_or((false, false));
+        let tool_hand =
+            self.shared.lock().map(|s| (s.tool == Tool::Hand || s.pan_modifier, false)).unwrap_or((false, false));
         if self.drag_last.is_some() {
             IDC_SIZEALL
         } else if tool_hand.0 {
             IDC_HAND
-        } else if tool_hand.1 {
-            IDC_CROSS
         } else {
-            IDC_ARROW
+            // Zoom et outils de sélection : réticule.
+            IDC_CROSS
         }
     }
 
@@ -262,6 +261,15 @@ impl Input {
                 let action = self.shared.lock().map(|s| (s.tool, s.pan_modifier)).unwrap_or((Tool::Hand, false));
                 if action.0 == Tool::Hand || action.1 {
                     self.start_drag(hwnd, x, y);
+                } else if action.0 != Tool::Zoom {
+                    // Outil de sélection : le cœur interprète le geste (voir `session::tools`).
+                    let p = pointer(x, y, wp);
+                    self.tool_drag = true;
+                    // SAFETY: capture de la souris pour la fenêtre courante.
+                    unsafe { SetCapture(hwnd) };
+                    if self.shared.lock().map(|mut s| s.pointer_down(&p).is_ok()).unwrap_or(false) {
+                        self.shared.native_changed();
+                    }
                 } else {
                     // Outil zoom : clic = avant, Alt+clic = arrière, centré sur le curseur.
                     // SAFETY: lecture d'un état de touche.
@@ -278,6 +286,14 @@ impl Input {
                 Some(0)
             }
             WM_LBUTTONUP | WM_MBUTTONUP => {
+                if self.tool_drag && msg == WM_LBUTTONUP {
+                    self.tool_drag = false;
+                    // SAFETY: relâche la capture prise au clic.
+                    unsafe { ReleaseCapture() };
+                    if self.shared.lock().map(|mut s| s.pointer_up(&pointer(x, y, wp)).is_ok()).unwrap_or(false) {
+                        self.shared.native_changed();
+                    }
+                }
                 self.end_drag();
                 Some(0)
             }
@@ -297,6 +313,10 @@ impl Input {
                 }
                 if changed {
                     self.shared.native_changed();
+                }
+                // Geste d'outil en cours, ou polygone en construction (l'aperçu suit le curseur sans bouton).
+                if self.shared.lock().map(|mut s| s.pointer_move(&pointer(x, y, wp)).is_ok()).unwrap_or(false) {
+                    self.shared.redraw();
                 }
                 let at = Vec2::new(f64::from(x), f64::from(y));
                 if let Some((p, inside)) = self.shared.lock().ok().and_then(|s| s.cursor_to_doc(at)) {
@@ -324,6 +344,13 @@ impl Input {
             _ => None,
         }
     }
+}
+
+/// Événement de pointeur pour le cœur : `wp` porte l'état des boutons et de Maj (MK_SHIFT).
+fn pointer(x: i32, y: i32, wp: WPARAM) -> Pointer {
+    // SAFETY: lecture d'un état de touche.
+    let alt = unsafe { GetKeyState(i32::from(VK_MENU)) } < 0;
+    Pointer { x: f64::from(x), y: f64::from(y), pressure: 1.0, shift: wp & MK_SHIFT != 0, alt }
 }
 
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {

@@ -25,6 +25,8 @@ pub enum CoreError {
     GroupCycle,
     #[error("le calque {0} n'est pas un groupe")]
     NotAGroup(u64),
+    #[error("aucune sélection")]
+    NoSelection,
     #[error("repère introuvable : {0}")]
     GuideNotFound(u64),
     #[error("raccourci invalide « {0} »")]

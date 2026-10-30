@@ -13,7 +13,7 @@ const CORE_ACTIONS = [
   "file.new", "file.open", "file.save", "file.save_as", "file.export", "file.close",
   "edit.undo", "edit.redo", "view.zoom_in", "view.zoom_out", "view.fit", "view.actual_size",
   "view.toggle_rulers", "view.toggle_grid", "view.toggle_guides", "view.toggle_snap",
-  "layer.new", "tab.next", "tab.prev", "tool.hand", "tool.zoom",
+  "layer.new", "select.all", "select.none", "select.invert", "tool.rect_select", "tool.lasso", "tool.wand", "tool.finish", "tool.cancel", "tab.next", "tab.prev", "tool.hand", "tool.zoom",
 ];
 
 describe("registre d'actions", () => {

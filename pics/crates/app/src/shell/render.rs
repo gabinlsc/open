@@ -95,6 +95,7 @@ fn run(mut renderer: Renderer, rx: Receiver<RenderMsg>, shared: &Shared) {
                 ResolvedTheme::Dark => Theme::Dark,
             },
             preview_guide: state.preview_guide,
+            selection: state.selection.as_ref(),
         };
         if let Err(e) = renderer.render(&frame) {
             eprintln!("rendu impossible : {e}");

@@ -246,6 +246,34 @@ export function TransformDialog() {
   );
 }
 
+const SELECT_OPS = {
+  feather: { title: "Contour progressif", label: "Rayon (px)", initial: "5", run: (r: number) => api.selectFeather(r) },
+  grow: { title: "Agrandir la sélection", label: "De (px)", initial: "3", run: (r: number) => api.selectGrow(r, true) },
+  shrink: { title: "Contracter la sélection", label: "De (px)", initial: "3", run: (r: number) => api.selectGrow(r, false) },
+} as const;
+
+export function SelectOpDialog({ op }: { op: keyof typeof SELECT_OPS }) {
+  const close = () => useStore.getState().setDialog(null);
+  const def = SELECT_OPS[op];
+  const [text, setText] = useState<string>(def.initial);
+  const value = parseNumber(text, 0, 0, 250);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (await useStore.getState().run(() => def.run(value))) close();
+  };
+  return (
+    <Modal title={def.title} onClose={close}>
+      <form onSubmit={submit} className="form">
+        <label>{def.label}<input inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)} /></label>
+        <div className="actions">
+          <button type="button" className="btn secondary" onClick={close}>Annuler</button>
+          <button type="submit" className="btn">Appliquer</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export function Dialogs() {
   const dialog = useStore((s) => s.dialog);
   if (!dialog) return null;
@@ -258,6 +286,8 @@ export function Dialogs() {
       return <ShortcutsDialog />;
     case "transform":
       return <TransformDialog />;
+    case "selectOp":
+      return <SelectOpDialog op={dialog.op} />;
     case "confirmClose":
       return <ConfirmCloseDialog id={dialog.id} name={dialog.name} />;
   }

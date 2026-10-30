@@ -132,4 +132,29 @@ mod tests {
         assert!(mask.get_pixel(2, 2)[0] < 60, "le fond blanc ne l'est pas : {:?}", mask.get_pixel(2, 2));
         assert!(run_mask(Path::new("/nonexistent.onnx"), &image).is_err());
     }
+
+    /// Vérification manuelle avec un vrai modèle (U²-Net) : `OPENPICS_REAL_MODEL`, `OPENPICS_REAL_IMAGE` (JPEG/PNG) et
+    /// `OPENPICS_REAL_OUT` (PNG du masque écrit). Ignoré si ces variables sont absentes.
+    #[test]
+    fn a_real_u2net_model_separates_the_subject_from_the_background() {
+        let (Some(model), Some(img), Some(out)) = (
+            std::env::var_os("OPENPICS_REAL_MODEL"),
+            std::env::var_os("OPENPICS_REAL_IMAGE"),
+            std::env::var_os("OPENPICS_REAL_OUT"),
+        ) else {
+            return;
+        };
+        if std::env::var_os("ORT_DYLIB_PATH").is_none() {
+            return;
+        }
+        let doc = openpics_io::open(Path::new(&img), openpics_core::DocId(1)).unwrap();
+        let image = doc.layers[0].pixels.clone();
+        let mask = run_mask(Path::new(&model), &image).unwrap();
+        let rgba = mask.to_rgba8();
+        let covered = rgba.chunks_exact(4).filter(|p| p[0] > 128).count() as f64 / (rgba.len() / 4) as f64;
+        println!("part sélectionnée : {:.1} %", covered * 100.0);
+        assert!((0.03..0.9).contains(&covered), "ni vide ni tout : {covered}");
+        let gray: Vec<u8> = rgba.chunks_exact(4).map(|p| p[0]).collect();
+        image::save_buffer(&out, &gray, mask.width(), mask.height(), image::ColorType::L8).unwrap();
+    }
 }

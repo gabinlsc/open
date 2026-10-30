@@ -63,8 +63,8 @@ impl Session {
         let e = self.entry()?;
         let id = e.active_layer.ok_or_else(|| SessionError::InvalidArgument("aucun calque sélectionné".into()))?;
         let layer = e.doc.layer(id)?;
-        if layer.is_group() {
-            return Err(openpics_core::CoreError::IsGroup(layer.name.clone()).into());
+        if !layer.is_raster() {
+            return Err(openpics_core::CoreError::NotRaster(layer.name.clone()).into());
         }
         if layer.locks.blocks_painting() {
             return Err(openpics_core::CoreError::LayerLocked(layer.name.clone()).into());
@@ -382,7 +382,7 @@ mod tests {
         s.layer_set_props(id, &p).unwrap();
         let g = s.group_add().unwrap();
         s.layer_select(g).unwrap();
-        assert!(s.pointer_down(&at(10.0, 10.0)).unwrap_err().to_string().contains("groupe"));
+        assert!(s.pointer_down(&at(10.0, 10.0)).unwrap_err().to_string().contains("pixels"));
     }
 
     #[test]

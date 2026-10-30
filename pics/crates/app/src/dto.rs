@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use openpics_core::adjust::{AdjKind, Adjustment, Extra};
 use openpics_core::styles::StrokePosition;
 use openpics_core::{Axis, BlendMode, Guide, Layer, LayerProps, LayerStyle, Locks, ViewSettings};
 use serde::{Deserialize, Serialize};
@@ -219,6 +220,7 @@ pub struct Snapshot {
     pub active_layer_id: Option<u64>,
     pub blend_modes: Vec<BlendInfo>,
     pub has_selection: bool,
+    pub adjustment_kinds: Vec<BlendInfo>,
     pub tool_options: ToolOptionsDto,
     pub paint_options: PaintOptionsDto,
     pub history: HistoryDto,
@@ -328,6 +330,7 @@ pub struct LayerDto {
     pub group: Option<u64>,
     /// Imbrication (0 = niveau supérieur), pour l'indentation du panneau.
     pub depth: usize,
+    pub adjustment: Option<AdjustmentDto>,
 }
 
 /// Identifiant JSON d'un mode (`multiply`, `soft_light`…), identique à celui du format `.ocv`.
@@ -357,6 +360,7 @@ impl From<&Layer> for LayerDto {
             isolated: l.props().isolated,
             group: l.group.map(|g| g.0),
             depth: 0,
+            adjustment: l.adjustment().map(AdjustmentDto::from),
         }
     }
 }
@@ -424,6 +428,18 @@ mod tests {
         }
         let json = serde_json::to_string(&StyleDto::from(&styles[0])).unwrap();
         assert!(json.contains("\"angleDeg\"") && json.contains("\"kind\":\"drop_shadow\""), "{json}");
+    }
+
+    #[test]
+    fn adjustment_kind_ids_roundtrip_and_dtos_expose_every_parameter() {
+        for k in AdjKind::ALL {
+            assert_eq!(parse_adj_kind(&adj_kind_id(k)), Some(k));
+            let dto = AdjustmentDto::from(&Adjustment::new(k));
+            assert_eq!(dto.params.len(), k.specs().len());
+            assert!(dto.params.iter().all(|p| p.value >= p.min && p.value <= p.max));
+        }
+        assert_eq!(parse_adj_kind("n'importe quoi"), None);
+        assert_eq!(adjustment_kinds().len(), 15);
     }
 
     #[test]
@@ -662,5 +678,87 @@ impl PaintOptionsDto {
 
     pub fn bg(&self) -> [u8; 3] {
         parse_hex(&self.background).unwrap_or([255; 3])
+    }
+}
+
+/// Paramètre numérique d'un réglage, avec sa plage : l'interface génère un curseur par paramètre.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ParamDto {
+    pub id: String,
+    pub label: String,
+    pub min: f32,
+    pub max: f32,
+    pub value: f32,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct StopDto {
+    pub position: f32,
+    pub color: String,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AdjustmentDto {
+    pub kind: String,
+    pub label: String,
+    pub params: Vec<ParamDto>,
+    /// Courbes : points (x, y) de la courbe commune.
+    pub curve: Option<Vec<(f32, f32)>>,
+    /// Courbes de dégradé : arrêts triés.
+    pub stops: Option<Vec<StopDto>>,
+    /// LUT 3D : taille de la table chargée.
+    pub lut_size: Option<usize>,
+    pub is_color_match: bool,
+}
+
+pub fn adj_kind_id(kind: AdjKind) -> String {
+    serde_json::to_value(kind).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default()
+}
+
+pub fn parse_adj_kind(id: &str) -> Option<AdjKind> {
+    serde_json::from_value(serde_json::Value::String(id.to_owned())).ok()
+}
+
+pub fn adjustment_kinds() -> Vec<BlendInfo> {
+    AdjKind::ALL.iter().map(|k| BlendInfo { id: adj_kind_id(*k), label: k.label().to_owned() }).collect()
+}
+
+impl From<&Adjustment> for AdjustmentDto {
+    fn from(a: &Adjustment) -> Self {
+        AdjustmentDto {
+            kind: adj_kind_id(a.kind),
+            label: a.kind.label().to_owned(),
+            params: a
+                .kind
+                .specs()
+                .iter()
+                .map(|s| ParamDto {
+                    id: s.id.to_owned(),
+                    label: s.label.to_owned(),
+                    min: s.min,
+                    max: s.max,
+                    value: a.value(s.id),
+                })
+                .collect(),
+            curve: match &a.extra {
+                Extra::Curves { master, .. } => Some(master.clone()),
+                _ => None,
+            },
+            stops: match &a.extra {
+                Extra::Stops(s) => Some(s.iter().map(|(p, c)| StopDto { position: *p, color: hex(*c) }).collect()),
+                _ => None,
+            },
+            lut_size: match &a.extra {
+                Extra::Lut(l) => Some(l.size),
+                _ => None,
+            },
+            is_color_match: a.kind == AdjKind::ColorMatch,
+        }
     }
 }

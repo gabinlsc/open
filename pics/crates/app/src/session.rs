@@ -6,8 +6,8 @@
 use std::path::{Path, PathBuf};
 
 use openpics_core::commands::{
-    AddGuide, AddLayer, AddMask, ClearGuides, MoveLayer, RemoveGuide, RemoveLayer, RemoveMask, SetLayerGroup,
-    SetLayerProps, SetLayerStyles, SetMaskEnabled,
+    AddGuide, AddLayer, AddMask, ClearGuides, MoveLayer, RemoveGuide, RemoveLayer, RemoveMask, SetAdjustment,
+    SetLayerGroup, SetLayerProps, SetLayerStyles, SetMaskEnabled,
 };
 use openpics_core::shortcuts::{Chord, Keymap};
 use openpics_core::snap::snap_axis;
@@ -552,6 +552,124 @@ impl Session {
         Ok(openpics_ops::apply_transform(&mut e.doc, layer, &m)?)
     }
 
+    /// Nouveau calque de réglage juste au-dessus du calque actif.
+    pub fn adjustment_add(&mut self, kind: &str) -> Result<u64, SessionError> {
+        let kind = crate::dto::parse_adj_kind(kind)
+            .ok_or_else(|| SessionError::InvalidArgument(format!("réglage inconnu : {kind}")))?;
+        let e = self.entry_mut()?;
+        let size = e.doc.size();
+        let index = e
+            .active_layer
+            .and_then(|a| e.doc.layers.iter().position(|l| l.id == a))
+            .map_or(e.doc.layers.len(), |i| i + 1);
+        let parent = index.checked_sub(1).and_then(|i| e.doc.layers.get(i)).and_then(|l| l.group);
+        let id = LayerId(e.doc.alloc_id());
+        let mut layer = Layer::new_adjustment(
+            id,
+            kind.label(),
+            TileGrid::new(size.width, size.height)?,
+            openpics_core::adjust::Adjustment::new(kind),
+        );
+        layer.group = parent;
+        e.doc.execute(Box::new(AddLayer::new(index, layer)))?;
+        e.active_layer = Some(id);
+        Ok(id.0)
+    }
+
+    fn adjustment_of(&self, id: u64) -> Result<openpics_core::adjust::Adjustment, SessionError> {
+        let layer = self.entry()?.doc.layer(LayerId(id))?;
+        layer.adjustment().cloned().ok_or_else(|| openpics_core::CoreError::NotAdjustment(layer.name.clone()).into())
+    }
+
+    fn adjustment_commit(
+        &mut self,
+        id: u64,
+        name: String,
+        adj: openpics_core::adjust::Adjustment,
+    ) -> Result<(), SessionError> {
+        if self.adjustment_of(id)? == adj.sanitized() {
+            return Ok(());
+        }
+        self.entry_mut()?.doc.execute(Box::new(SetAdjustment::new(name, LayerId(id), adj)))?;
+        Ok(())
+    }
+
+    pub fn adjustment_set_param(&mut self, id: u64, param: &str, value: f32) -> Result<(), SessionError> {
+        let mut adj = self.adjustment_of(id)?;
+        let label = adj.kind.specs().iter().find(|s| s.id == param).map(|s| s.label);
+        if !adj.set(param, value) {
+            return Err(SessionError::InvalidArgument(format!("paramètre inconnu : {param}")));
+        }
+        self.adjustment_commit(id, format!("{} : {}", adj.kind.label(), label.unwrap_or(param)), adj)
+    }
+
+    /// Remplace les points de la courbe commune (la courbe est ramenée à des points triés dans 0..1).
+    pub fn adjustment_set_curve(&mut self, id: u64, points: Vec<(f32, f32)>) -> Result<(), SessionError> {
+        let mut adj = self.adjustment_of(id)?;
+        match &mut adj.extra {
+            openpics_core::adjust::Extra::Curves { master, .. } => *master = points,
+            _ => return Err(SessionError::InvalidArgument("ce réglage n'a pas de courbe".into())),
+        }
+        self.adjustment_commit(id, "Courbes".into(), adj)
+    }
+
+    pub fn adjustment_set_stops(&mut self, id: u64, stops: &[(f32, String)]) -> Result<(), SessionError> {
+        let mut adj = self.adjustment_of(id)?;
+        let parsed = stops
+            .iter()
+            .map(|(p, c)| {
+                crate::dto::parse_hex(c)
+                    .map(|c| (*p, c))
+                    .ok_or_else(|| SessionError::InvalidArgument(format!("couleur invalide : {c}")))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        match &mut adj.extra {
+            openpics_core::adjust::Extra::Stops(s) => *s = parsed,
+            _ => return Err(SessionError::InvalidArgument("ce réglage n'a pas d'arrêts de dégradé".into())),
+        }
+        self.adjustment_commit(id, "Courbes de dégradé".into(), adj)
+    }
+
+    /// Charge un fichier `.cube` (limité à 64 Mio) dans un réglage « LUT 3D ».
+    pub fn adjustment_load_lut(&mut self, id: u64, path: &Path) -> Result<(), SessionError> {
+        const MAX_BYTES: u64 = 64 * 1024 * 1024;
+        let mut adj = self.adjustment_of(id)?;
+        if !matches!(adj.extra, openpics_core::adjust::Extra::Lut(_)) {
+            return Err(SessionError::InvalidArgument("ce réglage n'est pas une LUT 3D".into()));
+        }
+        let meta =
+            std::fs::metadata(path).map_err(|e| SessionError::InvalidArgument(format!("{} : {e}", path.display())))?;
+        if meta.len() > MAX_BYTES {
+            return Err(SessionError::InvalidArgument("fichier .cube trop volumineux (64 Mio maximum)".into()));
+        }
+        let text = std::fs::read_to_string(path)
+            .map_err(|e| SessionError::InvalidArgument(format!("{} : {e}", path.display())))?;
+        let lut = openpics_core::adjust::Lut3D::parse_cube(&text)
+            .map_err(|e| SessionError::InvalidArgument(format!("fichier .cube invalide — {e}")))?;
+        adj.extra = openpics_core::adjust::Extra::Lut(std::sync::Arc::new(lut));
+        self.adjustment_commit(id, "LUT 3D".into(), adj)
+    }
+
+    /// Correspondance de couleur : fait tendre les statistiques du calque `source` vers celles de `reference`.
+    pub fn adjustment_match(&mut self, id: u64, source: u64, reference: u64) -> Result<(), SessionError> {
+        let mut adj = self.adjustment_of(id)?;
+        if adj.kind != openpics_core::adjust::AdjKind::ColorMatch {
+            return Err(SessionError::InvalidArgument("ce réglage n'est pas une correspondance de couleur".into()));
+        }
+        let e = self.entry()?;
+        let stats = |layer: u64| -> Result<([f32; 3], [f32; 3]), SessionError> {
+            let l = e.doc.layer(LayerId(layer))?;
+            if !l.is_raster() {
+                return Err(openpics_core::CoreError::NotRaster(l.name.clone()).into());
+            }
+            openpics_ops::stats::color_stats(&l.pixels)
+                .ok_or_else(|| SessionError::InvalidArgument(format!("le calque « {} » est vide", l.name)))
+        };
+        let ((src_mean, src_std), (ref_mean, ref_std)) = (stats(source)?, stats(reference)?);
+        adj.extra = openpics_core::adjust::Extra::Match { src_mean, src_std, ref_mean, ref_std };
+        self.adjustment_commit(id, "Correspondance de couleur".into(), adj)
+    }
+
     pub fn mask_add(&mut self, id: u64, reveal: bool) -> Result<(), SessionError> {
         self.entry_mut()?.doc.execute(Box::new(AddMask::new(LayerId(id), reveal)))?;
         Ok(())
@@ -652,6 +770,7 @@ impl Session {
             active_layer_id,
             blend_modes: blend_infos(),
             has_selection: self.entry().is_ok_and(|e| e.doc.selection.is_some()),
+            adjustment_kinds: crate::dto::adjustment_kinds(),
             tool_options: self.tool_options,
             paint_options: self.paint.clone(),
             history,
@@ -1078,7 +1197,7 @@ mod tests {
         let snap = s.snapshot();
         assert_eq!((snap.layers[1].id, snap.layers[1].depth, snap.layers[1].group), (bottom, 1, Some(g)));
         s.layer_select(g).unwrap();
-        assert!(s.apply_op(ImageOp::Invert).unwrap_err().to_string().contains("groupe"));
+        assert!(s.apply_op(ImageOp::Invert).unwrap_err().to_string().contains("pixels"));
         assert!(s.layer_set_group(g, Some(g)).is_err());
         assert!(s.layer_set_group(g, Some(bottom)).is_err());
         assert!(
@@ -1107,5 +1226,104 @@ mod tests {
         let n = s.snapshot().history.names.len();
         s.layer_move_step(b, false).unwrap(); // déjà tout en bas : sans effet ni état d'historique
         assert_eq!(s.snapshot().history.names.len(), n);
+    }
+
+    #[test]
+    fn adjustment_layers_change_the_image_non_destructively_through_history() {
+        let mut s = session();
+        s.new_document(None, 8, 8).unwrap();
+        let bg = s.snapshot().layers[0].id;
+        let id = s.adjustment_add("invert").unwrap();
+        let snap = s.snapshot();
+        assert_eq!((snap.layers[0].id, snap.layers[0].adjustment.as_ref().unwrap().kind.as_str()), (id, "invert"));
+        assert_eq!(snap.adjustment_kinds.len(), 15);
+        let doc = s.render_state().document.unwrap();
+        assert_eq!(&doc.flatten_rgba8()[0..4], &[0, 0, 0, 255], "blanc inversé");
+        assert_eq!(doc.layers[0].pixels.get_pixel(0, 0), [255; 4], "les pixels du fond sont intacts");
+        s.undo().unwrap();
+        assert_eq!(s.snapshot().layers.len(), 1);
+        assert!(s.adjustment_add("inconnu").is_err());
+        // Les calques de réglage ne se peignent ni ne se transforment.
+        s.redo().unwrap();
+        s.layer_select(id).unwrap();
+        assert!(s.apply_op(ImageOp::Invert).unwrap_err().to_string().contains("pixels"));
+        assert!(s.adjustment_set_param(bg, "ev", 1.0).is_err(), "un calque raster n'est pas un réglage");
+    }
+
+    #[test]
+    fn parameters_curves_and_stops_are_validated_and_undoable() {
+        let mut s = session();
+        s.new_document(None, 8, 8).unwrap();
+        let ev = s.adjustment_add("exposure").unwrap();
+        s.adjustment_set_param(ev, "ev", -1.0).unwrap();
+        let p = |s: &Session| {
+            s.snapshot().layers[0].adjustment.as_ref().unwrap().params.iter().find(|p| p.id == "ev").unwrap().value
+        };
+        assert_eq!(p(&s), -1.0);
+        assert_eq!(s.snapshot().history.names.last().unwrap(), "Exposition : Exposition (IL)");
+        s.adjustment_set_param(ev, "ev", 99.0).unwrap();
+        assert_eq!(p(&s), 5.0, "borné à la plage");
+        let n = s.snapshot().history.names.len();
+        s.adjustment_set_param(ev, "ev", 5.0).unwrap();
+        assert_eq!(s.snapshot().history.names.len(), n, "sans changement : pas d'état");
+        assert!(s.adjustment_set_param(ev, "n'existe_pas", 1.0).is_err());
+        s.undo().unwrap();
+        assert_eq!(p(&s), -1.0);
+
+        let curves = s.adjustment_add("curves").unwrap();
+        s.adjustment_set_curve(curves, vec![(0.0, 0.0), (0.5, 0.8), (1.0, 1.0)]).unwrap();
+        assert_eq!(s.snapshot().layers[0].adjustment.as_ref().unwrap().curve.as_ref().unwrap().len(), 3);
+        assert!(s.adjustment_set_curve(ev, vec![]).is_err());
+        let map = s.adjustment_add("gradient_map").unwrap();
+        s.adjustment_set_stops(map, &[(0.0, "#000080".into()), (1.0, "#ffcc00".into())]).unwrap();
+        assert_eq!(s.snapshot().layers[0].adjustment.as_ref().unwrap().stops.as_ref().unwrap()[1].color, "#ffcc00");
+        assert!(s.adjustment_set_stops(map, &[(0.0, "bleu".into())]).is_err());
+    }
+
+    #[test]
+    fn cube_files_load_validate_and_apply() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = session();
+        s.new_document(None, 4, 4).unwrap();
+        let lut = s.adjustment_add("lut3_d").unwrap();
+        let mut swap = openpics_core::adjust::Lut3D::identity(2);
+        for e in &mut swap.data {
+            e.swap(0, 2);
+        }
+        let good = dir.path().join("swap.cube");
+        std::fs::write(&good, swap.to_cube()).unwrap();
+        s.adjustment_load_lut(lut, &good).unwrap();
+        assert_eq!(s.snapshot().layers[0].adjustment.as_ref().unwrap().lut_size, Some(2));
+        let bad = dir.path().join("bad.cube");
+        std::fs::write(&bad, "LUT_3D_SIZE 2\n1 2\n").unwrap();
+        assert!(s.adjustment_load_lut(lut, &bad).unwrap_err().to_string().contains("invalide"));
+        assert!(s.adjustment_load_lut(lut, &dir.path().join("absent.cube")).is_err());
+        let ev = s.adjustment_add("exposure").unwrap();
+        assert!(s.adjustment_load_lut(ev, &good).is_err());
+    }
+
+    #[test]
+    fn colour_match_uses_two_raster_layers() {
+        let mut s = session();
+        s.new_document(None, 8, 8).unwrap();
+        let dark = s.snapshot().layers[0].id;
+        let bright = s.layer_add().unwrap();
+        {
+            let e = s.entry_mut().unwrap();
+            for y in 0..8 {
+                for x in 0..8 {
+                    e.doc.layer_mut(LayerId(bright)).unwrap().pixels.put_pixel(x, y, [220, 200, 180, 255]);
+                    let v = if (x + y) % 2 == 0 { 40 } else { 80 };
+                    e.doc.layer_mut(LayerId(dark)).unwrap().pixels.put_pixel(x, y, [v, v, v, 255]);
+                }
+            }
+        }
+        let m = s.adjustment_add("color_match").unwrap();
+        assert!(s.adjustment_match(m, dark, m).is_err(), "la référence doit être un calque raster");
+        s.adjustment_match(m, dark, bright).unwrap();
+        assert_eq!(s.snapshot().history.names.last().unwrap(), "Correspondance de couleur");
+        let flat = s.render_state().document.unwrap().flatten_rgba8();
+        assert!(flat[0] > 100, "le gris sombre est ramené vers la teinte de la référence : {}", flat[0]);
+        assert!(s.adjustment_match(dark, dark, bright).is_err());
     }
 }

@@ -169,3 +169,10 @@ input[aria-invalid="true"] { border-color: var(--danger); }
 .num input[type="color"] { padding: 0; height: 26px; }
 .form label.inline { display: flex; align-items: center; gap: 6px; font-weight: 400; }
 .sidebar label.inline { display: flex; align-items: center; gap: 6px; font-weight: 400; }
+
+.slider { display: grid; grid-template-columns: minmax(70px, 1.2fr) 2fr 44px; align-items: center; gap: 6px; font-weight: 400; }
+.slider span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slider input { width: 100%; min-width: 0; padding: 0; }
+.slider output { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.curve { display: grid; gap: 6px; }
+.gradient-preview { height: 18px; border-radius: 6px; border: 1px solid var(--line); }

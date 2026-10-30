@@ -21,6 +21,10 @@ pub enum CoreError {
     InvalidTransform(String),
     #[error("le calque « {0} » est un groupe : cette opération s'applique à un calque raster")]
     IsGroup(String),
+    #[error("le calque « {0} » n'est pas un calque de pixels : cette opération ne s'y applique pas")]
+    NotRaster(String),
+    #[error("le calque « {0} » n'est pas un calque de réglage")]
+    NotAdjustment(String),
     #[error("ce déplacement créerait une boucle de groupes")]
     GroupCycle,
     #[error("le calque {0} n'est pas un groupe")]

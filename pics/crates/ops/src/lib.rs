@@ -6,6 +6,7 @@ pub mod brush;
 pub mod fill;
 pub mod retouch;
 pub mod selection;
+pub mod stats;
 pub mod transform;
 
 use std::sync::Arc;
@@ -44,8 +45,8 @@ impl Op {
 /// Applique `op` au calque et l'enregistre dans l'historique. Renvoie `false` si rien n'a changé.
 pub fn apply_to_layer(doc: &mut Document, layer: LayerId, op: Op) -> Result<bool, CoreError> {
     let target = doc.layer(layer)?;
-    if target.is_group() {
-        return Err(CoreError::IsGroup(target.name.clone()));
+    if !target.is_raster() {
+        return Err(CoreError::NotRaster(target.name.clone()));
     }
     if target.locks.blocks_painting() {
         return Err(CoreError::LayerLocked(target.name.clone()));
@@ -71,8 +72,8 @@ fn record(doc: &mut Document, layer: LayerId, name: &str, new: TileGrid) -> Resu
 
 fn check_movable(doc: &Document, layer: LayerId) -> Result<(), CoreError> {
     let l = doc.layer(layer)?;
-    if l.is_group() {
-        return Err(CoreError::IsGroup(l.name.clone()));
+    if !l.is_raster() {
+        return Err(CoreError::NotRaster(l.name.clone()));
     }
     if l.locks.blocks_moving() { Err(CoreError::LayerLocked(l.name.clone())) } else { Ok(()) }
 }

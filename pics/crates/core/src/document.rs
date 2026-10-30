@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::adjust::Adjustment;
 use crate::blend::BlendMode;
 use crate::error::CoreError;
 use crate::geom::Size;
@@ -77,14 +78,15 @@ pub struct LayerProps {
     pub isolated: bool,
 }
 
-/// Nature d'un calque : pixels, ou groupe qui en contient d'autres.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Nature d'un calque : pixels, groupe qui en contient d'autres, ou réglage appliqué à ce qui est dessous.
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum LayerKind {
     #[default]
     Raster,
     Group {
         isolated: bool,
     },
+    Adjustment(Box<Adjustment>),
 }
 
 /// Calque raster ou groupe (un groupe n'a pas de pixels propres : sa grille reste vide). Les réglages, textes
@@ -138,6 +140,23 @@ impl Layer {
         matches!(self.kind, LayerKind::Group { .. })
     }
 
+    /// Calque de pixels : le seul type que l'on peut peindre, transformer ou filtrer.
+    pub fn is_raster(&self) -> bool {
+        matches!(self.kind, LayerKind::Raster)
+    }
+
+    pub fn adjustment(&self) -> Option<&Adjustment> {
+        match &self.kind {
+            LayerKind::Adjustment(a) => Some(a),
+            _ => None,
+        }
+    }
+
+    /// Calque de réglage : sans pixels, il applique `adjustment` à ce qui est dessous.
+    pub fn new_adjustment(id: LayerId, name: impl Into<String>, pixels: TileGrid, adjustment: Adjustment) -> Self {
+        Self { kind: LayerKind::Adjustment(Box::new(adjustment.sanitized())), ..Layer::new(id, name, pixels) }
+    }
+
     pub fn props(&self) -> LayerProps {
         LayerProps {
             name: self.name.clone(),
@@ -148,7 +167,7 @@ impl Layer {
             locks: self.locks,
             link: self.link,
             clip_to_below: self.clip_to_below,
-            isolated: !matches!(self.kind, LayerKind::Group { isolated: false }),
+            isolated: !matches!(&self.kind, LayerKind::Group { isolated: false }),
         }
     }
 

@@ -6,6 +6,7 @@ use crate::blend::BlendMode;
 use crate::error::CoreError;
 use crate::geom::Size;
 use crate::history::{Command, History};
+use crate::styles::LayerStyle;
 use crate::tile::TileGrid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -87,6 +88,8 @@ pub struct Layer {
     pub link: Option<u64>,
     pub clip_to_below: bool,
     pub mask: Option<Mask>,
+    /// Styles de calque, du premier appliqué au dernier ; vide par défaut.
+    pub styles: Vec<LayerStyle>,
     pub pixels: TileGrid,
 }
 
@@ -103,6 +106,7 @@ impl Layer {
             link: None,
             clip_to_below: false,
             mask: None,
+            styles: Vec::new(),
             pixels,
         }
     }

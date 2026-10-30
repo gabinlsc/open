@@ -501,7 +501,7 @@ impl Renderer {
                     let ts = f64::from(TILE_SIZE);
                     let sample = doc.layers.first().map(|l| &l.pixels);
                     for key in sample.map(|g| g.keys_in_rect(visible)).unwrap_or_default() {
-                        if doc.layers.iter().all(|l| l.pixels.tile(key).is_none()) {
+                        if !openpics_core::composite::tile_has_content(doc, key) {
                             continue;
                         }
                         let a = frame
@@ -746,6 +746,7 @@ fn is_plain(doc: &Document) -> bool {
                 && l.blend == openpics_core::BlendMode::Normal
                 && l.mask.is_none()
                 && !l.clip_to_below
+                && l.styles.is_empty()
         }
         _ => false,
     }

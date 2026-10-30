@@ -9,7 +9,7 @@ use std::path::Path;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::{DynamicImage, ImageReader, RgbaImage};
 use openpics_core::tile::MAX_DIMENSION;
-use openpics_core::{BlendMode, DocId, Document, Guide, Layer, LayerId, Locks, Mask, Size, TileGrid};
+use openpics_core::{BlendMode, DocId, Document, Guide, Layer, LayerId, LayerStyle, Locks, Mask, Size, TileGrid};
 use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
@@ -59,6 +59,8 @@ struct LayerEntry {
     clip_to_below: bool,
     #[serde(default)]
     mask: Option<MaskEntry>,
+    #[serde(default)]
+    styles: Vec<LayerStyle>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -79,6 +81,7 @@ impl LayerEntry {
             link: l.link,
             clip_to_below: l.clip_to_below,
             mask: l.mask.as_ref().map(|m| MaskEntry { enabled: m.enabled }),
+            styles: l.styles.clone(),
         }
     }
 }
@@ -192,6 +195,7 @@ pub(crate) fn read(path: &Path, id: DocId) -> Result<Document, IoError> {
         props.link = entry.link;
         props.clip_to_below = entry.clip_to_below;
         layer.set_props(&props);
+        layer.styles = entry.styles.iter().map(LayerStyle::sanitized).collect();
         if let Some(m) = &entry.mask {
             layer.mask =
                 Some(Mask { pixels: read_grid(&mut zip, &mask_path(entry.id), doc_size)?, enabled: m.enabled });
@@ -280,6 +284,46 @@ mod tests {
             again.layers[1].mask.as_mut().unwrap().enabled = false;
             again.flatten_rgba8()
         });
+    }
+
+    #[test]
+    fn styles_roundtrip_and_hostile_values_are_bounded() {
+        use openpics_core::commands::SetLayerStyles;
+        use openpics_core::styles::StrokePosition;
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("styles.ocv");
+        let mut d = sample();
+        let top = d.layers[1].id;
+        let styles = vec![
+            LayerStyle::DropShadow { color: [1, 2, 3], opacity: 0.6, angle_deg: 45.0, distance: 7.0, size: 4.0 },
+            LayerStyle::Stroke { color: [9, 8, 7], opacity: 1.0, size: 2.0, position: StrokePosition::Center },
+            LayerStyle::GradientOverlay {
+                from: [0; 3],
+                to: [255; 3],
+                angle_deg: 90.0,
+                opacity: 0.5,
+                blend: BlendMode::Overlay,
+            },
+        ];
+        d.execute(Box::new(SetLayerStyles::new("s", top, styles.clone()))).unwrap();
+        save(&mut d, &p).unwrap();
+        assert_eq!(open(&p, DocId(2)).unwrap().layers[1].styles, styles);
+
+        let q = dir.path().join("hostile.ocv");
+        let mut zip = ZipWriter::new(std::fs::File::create(&q).unwrap());
+        zip.start_file(MANIFEST, SimpleFileOptions::default()).unwrap();
+        zip.write_all(br#"{"format":"openpics","schema":2,"name":"x","width":1,"height":1,"layers":[{"id":1,"name":"a","visible":true,"styles":[{"kind":"outer_glow","color":[1,2,3],"opacity":99.0,"size":1e12}]}]}"#).unwrap();
+        zip.start_file(layer_path(1), SimpleFileOptions::default()).unwrap();
+        let mut png = Vec::new();
+        RgbaImage::from_pixel(1, 1, image::Rgba([1, 2, 3, 255]))
+            .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        zip.write_all(&png).unwrap();
+        zip.finish().unwrap();
+        match &open(&q, DocId(3)).unwrap().layers[0].styles[0] {
+            LayerStyle::OuterGlow { opacity, size, .. } => assert!(*opacity <= 1.0 && *size <= 250.0),
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]

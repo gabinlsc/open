@@ -164,6 +164,8 @@ pub fn run() {
             commands::layer_remove,
             commands::layer_move,
             commands::layer_set_props,
+            commands::layer_set_styles,
+            commands::layer_transform,
             commands::mask_add,
             commands::mask_remove,
             commands::mask_set_enabled,

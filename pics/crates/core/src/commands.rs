@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::document::{Axis, Document, Guide, Layer, LayerId, LayerProps, Mask};
 use crate::error::CoreError;
 use crate::history::Command;
+use crate::styles::LayerStyle;
 use crate::tile::{TileGrid, TileKey, TileSlot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -437,6 +438,38 @@ impl Command for SetMaskEnabled {
     }
 }
 
+/// Remplace la liste de styles d'un calque (valeurs bornées à l'application).
+pub struct SetLayerStyles {
+    name: String,
+    layer: LayerId,
+    after: Vec<LayerStyle>,
+    before: Option<Vec<LayerStyle>>,
+}
+
+impl SetLayerStyles {
+    pub fn new(name: impl Into<String>, layer: LayerId, styles: Vec<LayerStyle>) -> Self {
+        Self { name: name.into(), layer, after: styles.iter().map(LayerStyle::sanitized).collect(), before: None }
+    }
+}
+
+impl Command for SetLayerStyles {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn apply(&mut self, doc: &mut Document) -> Result<(), CoreError> {
+        let layer = doc.layer_mut(self.layer)?;
+        self.before = Some(std::mem::replace(&mut layer.styles, self.after.clone()));
+        Ok(())
+    }
+
+    fn revert(&mut self, doc: &mut Document) -> Result<(), CoreError> {
+        let before = self.before.take().ok_or(CoreError::LayerNotFound(self.layer.0))?;
+        doc.layer_mut(self.layer)?.styles = before;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -639,5 +672,22 @@ mod tests {
         let before = d.flatten_rgba8();
         d.execute(Box::new(AddMask::new(top, true))).unwrap();
         assert_eq!(d.flatten_rgba8(), before);
+    }
+
+    #[test]
+    fn layer_styles_are_sanitized_and_undoable() {
+        let (mut d, _, top) = two_layer_doc();
+        let wild = LayerStyle::OuterGlow { color: [1, 2, 3], opacity: 5.0, size: 1e9 };
+        d.execute(Box::new(SetLayerStyles::new("Styles de calque", top, vec![wild]))).unwrap();
+        match &d.layer(top).unwrap().styles[0] {
+            LayerStyle::OuterGlow { opacity, size, .. } => {
+                assert_eq!((*opacity, *size), (1.0, crate::styles::MAX_SIZE))
+            }
+            other => panic!("{other:?}"),
+        }
+        d.undo().unwrap();
+        assert!(d.layer(top).unwrap().styles.is_empty());
+        d.redo().unwrap();
+        assert_eq!(d.layer(top).unwrap().styles.len(), 1);
     }
 }

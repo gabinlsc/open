@@ -16,11 +16,13 @@ import type { LayerPropsDto } from "./gen/LayerPropsDto";
 import type { OpenResult } from "./gen/OpenResult";
 import type { ResolvedTheme } from "./gen/ResolvedTheme";
 import type { SettingsDto } from "./gen/SettingsDto";
+import type { StyleDto } from "./gen/StyleDto";
 import type { Snapshot } from "./gen/Snapshot";
 import type { ThemeChoice } from "./gen/ThemeChoice";
+import type { TransformDto } from "./gen/TransformDto";
 import type { Tool } from "./gen/Tool";
 
-export type { AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, SettingsDto, Snapshot, ThemeChoice, Tool, ResolvedTheme };
+export type { AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, TransformDto, ResolvedTheme };
 
 /** Erreur typée côté TS : `code` est stable, `message` est affichable tel quel. */
 export class CommandError extends Error {
@@ -71,6 +73,8 @@ export const api = {
   layerRemove: (id: number) => call<Snapshot>("layer_remove", { id }),
   layerMove: (id: number, to: number) => call<Snapshot>("layer_move", { id, to }),
   layerSetProps: (id: number, props: LayerPropsDto) => call<Snapshot>("layer_set_props", { id, props }),
+  layerSetStyles: (id: number, styles: StyleDto[]) => call<Snapshot>("layer_set_styles", { id, styles }),
+  layerTransform: (transform: TransformDto) => call<Snapshot>("layer_transform", { transform }),
   maskAdd: (id: number, reveal: boolean) => call<Snapshot>("mask_add", { id, reveal }),
   maskRemove: (id: number) => call<Snapshot>("mask_remove", { id }),
   maskSetEnabled: (id: number, enabled: boolean) => call<Snapshot>("mask_set_enabled", { id, enabled }),

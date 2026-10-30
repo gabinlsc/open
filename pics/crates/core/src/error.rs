@@ -17,6 +17,8 @@ pub enum CoreError {
     HasMask(u64),
     #[error("position de calque invalide : {index} (le document a {len} calques)")]
     LayerIndex { index: usize, len: usize },
+    #[error("transformation invalide : {0}")]
+    InvalidTransform(String),
     #[error("repère introuvable : {0}")]
     GuideNotFound(u64),
     #[error("raccourci invalide « {0} »")]

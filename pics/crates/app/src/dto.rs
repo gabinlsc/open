@@ -3,7 +3,8 @@
 
 use std::collections::BTreeMap;
 
-use openpics_core::{Axis, BlendMode, Guide, Layer, LayerProps, Locks, ViewSettings};
+use openpics_core::styles::StrokePosition;
+use openpics_core::{Axis, BlendMode, Guide, Layer, LayerProps, LayerStyle, Locks, ViewSettings};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -278,6 +279,7 @@ pub struct LayerDto {
     pub clip_to_below: bool,
     pub has_mask: bool,
     pub mask_enabled: bool,
+    pub styles: Vec<StyleDto>,
 }
 
 /// Identifiant JSON d'un mode (`multiply`, `soft_light`…), identique à celui du format `.ocv`.
@@ -302,6 +304,7 @@ impl From<&Layer> for LayerDto {
             clip_to_below: l.clip_to_below,
             has_mask: l.mask.is_some(),
             mask_enabled: l.mask.as_ref().is_some_and(|m| m.enabled),
+            styles: l.styles.iter().map(StyleDto::from).collect(),
         }
     }
 }
@@ -352,6 +355,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn style_dtos_roundtrip_and_reject_invalid_colours() {
+        let styles = vec![
+            LayerStyle::DropShadow { color: [1, 2, 3], opacity: 0.5, angle_deg: 30.0, distance: 4.0, size: 2.0 },
+            LayerStyle::Stroke { color: [255, 0, 128], opacity: 1.0, size: 3.0, position: StrokePosition::Inside },
+            LayerStyle::ColorOverlay { color: [9, 9, 9], opacity: 1.0, blend: BlendMode::Multiply },
+        ];
+        for s in &styles {
+            assert_eq!(StyleDto::from(s).to_style().as_ref(), Some(s));
+        }
+        assert_eq!(hex([255, 0, 128]), "#ff0080");
+        for bad in ["ff0080", "#ff00", "#gg0000", "#ff00801", "", "#é0000"] {
+            assert_eq!(parse_hex(bad), None, "{bad}");
+        }
+        let json = serde_json::to_string(&StyleDto::from(&styles[0])).unwrap();
+        assert!(json.contains("\"angleDeg\"") && json.contains("\"kind\":\"drop_shadow\""), "{json}");
+    }
+
+    #[test]
     fn blend_ids_roundtrip_for_all_27_modes() {
         for mode in BlendMode::ALL {
             assert_eq!(parse_blend(&blend_id(mode)), Some(mode));
@@ -360,4 +381,127 @@ mod tests {
         assert_eq!(blend_infos().len(), 27);
         assert_eq!(blend_id(BlendMode::SoftLight), "soft_light");
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export)]
+pub enum StrokePositionDto {
+    Outside,
+    Inside,
+    Center,
+}
+
+/// Style de calque tel que l'interface le manipule : couleurs en « #rrggbb », mode en identifiant.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(export)]
+pub enum StyleDto {
+    #[serde(rename_all = "camelCase")]
+    DropShadow { color: String, opacity: f32, angle_deg: f32, distance: f32, size: f32 },
+    #[serde(rename_all = "camelCase")]
+    OuterGlow { color: String, opacity: f32, size: f32 },
+    #[serde(rename_all = "camelCase")]
+    Stroke { color: String, opacity: f32, size: f32, position: StrokePositionDto },
+    #[serde(rename_all = "camelCase")]
+    ColorOverlay { color: String, opacity: f32, blend: String },
+    #[serde(rename_all = "camelCase")]
+    GradientOverlay { from: String, to: String, angle_deg: f32, opacity: f32, blend: String },
+}
+
+pub fn hex(c: [u8; 3]) -> String {
+    format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])
+}
+
+pub fn parse_hex(s: &str) -> Option<[u8; 3]> {
+    let h = s.strip_prefix('#')?;
+    if h.len() != 6 || !h.is_ascii() {
+        return None;
+    }
+    let v = u32::from_str_radix(h, 16).ok()?;
+    Some([(v >> 16) as u8, (v >> 8) as u8, v as u8])
+}
+
+impl From<&LayerStyle> for StyleDto {
+    fn from(s: &LayerStyle) -> Self {
+        let pos = |p: &StrokePosition| match p {
+            StrokePosition::Outside => StrokePositionDto::Outside,
+            StrokePosition::Inside => StrokePositionDto::Inside,
+            StrokePosition::Center => StrokePositionDto::Center,
+        };
+        match s {
+            LayerStyle::DropShadow { color, opacity, angle_deg, distance, size } => StyleDto::DropShadow {
+                color: hex(*color),
+                opacity: *opacity,
+                angle_deg: *angle_deg,
+                distance: *distance,
+                size: *size,
+            },
+            LayerStyle::OuterGlow { color, opacity, size } => {
+                StyleDto::OuterGlow { color: hex(*color), opacity: *opacity, size: *size }
+            }
+            LayerStyle::Stroke { color, opacity, size, position } => {
+                StyleDto::Stroke { color: hex(*color), opacity: *opacity, size: *size, position: pos(position) }
+            }
+            LayerStyle::ColorOverlay { color, opacity, blend } => {
+                StyleDto::ColorOverlay { color: hex(*color), opacity: *opacity, blend: blend_id(*blend) }
+            }
+            LayerStyle::GradientOverlay { from, to, angle_deg, opacity, blend } => StyleDto::GradientOverlay {
+                from: hex(*from),
+                to: hex(*to),
+                angle_deg: *angle_deg,
+                opacity: *opacity,
+                blend: blend_id(*blend),
+            },
+        }
+    }
+}
+
+impl StyleDto {
+    /// `None` si une couleur ou un mode de fusion est invalide : on refuse plutôt que de deviner.
+    pub fn to_style(&self) -> Option<LayerStyle> {
+        let pos = |p: &StrokePositionDto| match p {
+            StrokePositionDto::Outside => StrokePosition::Outside,
+            StrokePositionDto::Inside => StrokePosition::Inside,
+            StrokePositionDto::Center => StrokePosition::Center,
+        };
+        Some(match self {
+            StyleDto::DropShadow { color, opacity, angle_deg, distance, size } => LayerStyle::DropShadow {
+                color: parse_hex(color)?,
+                opacity: *opacity,
+                angle_deg: *angle_deg,
+                distance: *distance,
+                size: *size,
+            },
+            StyleDto::OuterGlow { color, opacity, size } => {
+                LayerStyle::OuterGlow { color: parse_hex(color)?, opacity: *opacity, size: *size }
+            }
+            StyleDto::Stroke { color, opacity, size, position } => {
+                LayerStyle::Stroke { color: parse_hex(color)?, opacity: *opacity, size: *size, position: pos(position) }
+            }
+            StyleDto::ColorOverlay { color, opacity, blend } => {
+                LayerStyle::ColorOverlay { color: parse_hex(color)?, opacity: *opacity, blend: parse_blend(blend)? }
+            }
+            StyleDto::GradientOverlay { from, to, angle_deg, opacity, blend } => LayerStyle::GradientOverlay {
+                from: parse_hex(from)?,
+                to: parse_hex(to)?,
+                angle_deg: *angle_deg,
+                opacity: *opacity,
+                blend: parse_blend(blend)?,
+            },
+        })
+    }
+}
+
+/// Transformation libre saisie dans l'interface : échelle en pourcentage, rotation en degrés (sens horaire),
+/// déplacement en pixels, le tout autour du centre du document.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TransformDto {
+    pub scale_x: f64,
+    pub scale_y: f64,
+    pub rotation_deg: f64,
+    pub translate_x: f64,
+    pub translate_y: f64,
 }

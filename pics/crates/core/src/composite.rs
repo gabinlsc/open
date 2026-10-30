@@ -5,6 +5,7 @@
 
 use crate::blend::{BlendMode, composite};
 use crate::document::{Document, Layer};
+use crate::styles::{LayerStyle, Region, effect_alpha, gradient_at};
 use crate::tile::{TILE_SIZE, Tile, TileKey};
 
 const TS: usize = TILE_SIZE as usize;
@@ -68,6 +69,114 @@ fn blend_onto(backdrop: &mut [Px], src: &[Px], mode: BlendMode, opacity: f32, ke
     }
 }
 
+/// Vrai si la tuile peut contenir quelque chose : un calque y a des pixels, ou un calque à styles a des
+/// pixels assez près pour que son ombre, sa lueur ou son contour y débordent.
+pub fn tile_has_content(doc: &Document, key: TileKey) -> bool {
+    doc.layers.iter().any(|l| {
+        if l.pixels.tile(key).is_some() {
+            return true;
+        }
+        if l.styles.is_empty() {
+            return false;
+        }
+        let reach = l.styles.iter().map(LayerStyle::reach).max().unwrap_or(0);
+        let tiles = reach.div_ceil(TILE_SIZE) as i64;
+        (-tiles..=tiles).any(|dy| {
+            (-tiles..=tiles).any(|dx| {
+                let (tx, ty) = (i64::from(key.tx) + dx, i64::from(key.ty) + dy);
+                tx >= 0 && ty >= 0 && l.pixels.tile(TileKey { tx: tx as u32, ty: ty as u32 }).is_some()
+            })
+        })
+    })
+}
+
+/// Forme du calque (alpha × masque, sans remplissage) sur un rectangle de coordonnées de document.
+fn read_shape(layer: &Layer, x0: i64, y0: i64, side: usize) -> Region {
+    let mut data = Vec::with_capacity(side * side);
+    for dy in 0..side as i64 {
+        for dx in 0..side as i64 {
+            let (x, y) = (x0 + dx, y0 + dy);
+            let v = if x < 0 || y < 0 || x >= i64::from(layer.pixels.width()) || y >= i64::from(layer.pixels.height()) {
+                0.0
+            } else {
+                let (ux, uy) = (x as u32, y as u32);
+                let a = f32::from(layer.pixels.get_pixel(ux, uy)[3]) / 255.0;
+                let m = layer
+                    .mask
+                    .as_ref()
+                    .filter(|m| m.enabled)
+                    .map_or(1.0, |m| f32::from(m.pixels.get_pixel(ux, uy)[0]) / 255.0);
+                a * m
+            };
+            data.push(v);
+        }
+    }
+    Region { x0, y0, w: side, h: side, data }
+}
+
+/// Entoure le contenu d'une tuile de ses styles : ombre et lueur dessous, contour et incrustations dessus.
+fn apply_styles(doc: &Document, layer: &Layer, key: TileKey, content: &[Px]) -> Vec<Px> {
+    let halo = i64::from(layer.styles.iter().map(LayerStyle::reach).max().unwrap_or(0));
+    let (ox, oy) = tile_origin(key);
+    let side = TS + 2 * halo as usize;
+    let shape = read_shape(layer, i64::from(ox) - halo, i64::from(oy) - halo, side);
+    let size = doc.size();
+    let mut out = vec![[0.0; 4]; N];
+    let rgb = |c: [u8; 3]| [f32::from(c[0]) / 255.0, f32::from(c[1]) / 255.0, f32::from(c[2]) / 255.0];
+    let pos = |i: usize| (ox + (i % TS) as u32, oy + (i / TS) as u32);
+    let region_alpha = |eff: &Region, i: usize| eff.at(i64::from(pos(i).0), i64::from(pos(i).1));
+
+    for style in layer.styles.iter().filter(|s| s.is_under()) {
+        let eff = effect_alpha(style, &shape);
+        let color = match style {
+            LayerStyle::DropShadow { color, .. } | LayerStyle::OuterGlow { color, .. } => rgb(*color),
+            _ => continue,
+        };
+        for (i, o) in out.iter_mut().enumerate() {
+            let a = region_alpha(&eff, i);
+            if a > 0.0 {
+                let (x, y) = pos(i);
+                *o = composite(BlendMode::Normal, *o, color, a, x, y);
+            }
+        }
+    }
+    for (i, (o, c)) in out.iter_mut().zip(content).enumerate() {
+        if c[3] > 0.0 {
+            let (x, y) = pos(i);
+            *o = composite(BlendMode::Normal, *o, [c[0], c[1], c[2]], c[3], x, y);
+        }
+    }
+    for style in layer.styles.iter().filter(|s| !s.is_under()) {
+        let eff = effect_alpha(style, &shape);
+        for (i, o) in out.iter_mut().enumerate() {
+            let a = region_alpha(&eff, i);
+            if a <= 0.0 {
+                continue;
+            }
+            let (x, y) = pos(i);
+            let (color, mode) = match style {
+                LayerStyle::Stroke { color, .. } => (rgb(*color), BlendMode::Normal),
+                LayerStyle::ColorOverlay { color, blend, .. } => (rgb(*color), *blend),
+                LayerStyle::GradientOverlay { from, to, angle_deg, blend, .. } => (
+                    gradient_at(
+                        *from,
+                        *to,
+                        *angle_deg,
+                        f64::from(x),
+                        f64::from(y),
+                        f64::from(size.width),
+                        f64::from(size.height),
+                    ),
+                    *blend,
+                ),
+                _ => continue,
+            };
+            *o = composite(mode, *o, color, a, x, y);
+        }
+    }
+    out
+}
+
 /// Composition d'une tuile : un calque de base et les calques écrêtés qui le suivent forment un groupe
 /// d'écrêtage, composé à part puis fusionné avec le mode et l'opacité de la base.
 pub fn composite_tile(doc: &Document, key: TileKey) -> Vec<Px> {
@@ -85,7 +194,10 @@ pub fn composite_tile(doc: &Document, key: TileKey) -> Vec<Px> {
         if !base.visible {
             continue; // un calque caché cache aussi ce qui lui est écrêté
         }
-        let Some(mut group) = content(base, key) else { continue };
+        let styled = !base.styles.is_empty();
+        let Some(mut group) = content(base, key).or_else(|| styled.then(|| Content { px: vec![[0.0; 4]; N] })) else {
+            continue;
+        };
         let base_alpha: Vec<f32> = group.px.iter().map(|p| p[3]).collect();
         for layer in clipped.iter().filter(|l| l.visible) {
             let Some(src) = content(layer, key) else { continue };
@@ -101,6 +213,9 @@ pub fn composite_tile(doc: &Document, key: TileKey) -> Vec<Px> {
                 *g = [out[0], out[1], out[2], base_alpha[idx]];
             }
         }
+        if styled {
+            group.px = apply_styles(doc, base, key, &group.px);
+        }
         blend_onto(&mut backdrop, &group.px, base.blend, base.opacity, key);
     }
     backdrop
@@ -115,7 +230,7 @@ pub fn flatten_rgba8(doc: &Document) -> Vec<u8> {
         for tx in 0..size.width.div_ceil(TILE_SIZE) {
             let key = TileKey { tx, ty };
             // Une tuile que personne ne touche reste transparente : on évite de la composer.
-            if doc.layers.iter().all(|l| l.pixels.tile(key).is_none()) {
+            if !tile_has_content(doc, key) {
                 continue;
             }
             let tile = composite_tile(doc, key);
@@ -270,5 +385,100 @@ mod tests {
     fn untouched_tiles_stay_transparent_and_empty_document_flattens() {
         let d = doc(600, 600);
         assert!(d.flatten_rgba8().iter().all(|&b| b == 0));
+    }
+
+    use crate::styles::StrokePosition;
+
+    /// Calque 64×64 avec un carré rouge opaque de 10 px en (20, 20).
+    fn square_doc() -> (Document, crate::LayerId) {
+        let mut d = doc(64, 64);
+        let id = d.layers[0].id;
+        for y in 20..30 {
+            for x in 20..30 {
+                d.layers[0].pixels.put_pixel(x, y, [255, 0, 0, 255]);
+            }
+        }
+        (d, id)
+    }
+
+    #[test]
+    fn drop_shadow_appears_beside_the_shape_and_under_it() {
+        let (mut d, id) = square_doc();
+        d.layer_mut(id).unwrap().styles =
+            vec![LayerStyle::DropShadow { color: [0, 0, 255], opacity: 1.0, angle_deg: 0.0, distance: 8.0, size: 0.0 }];
+        assert_eq!(px(&d, 33, 25), [0, 0, 255, 255], "ombre à droite");
+        assert_eq!(px(&d, 25, 25), [255, 0, 0, 255], "le contenu reste au-dessus de l'ombre");
+        assert_eq!(px(&d, 15, 25), [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn shadow_spills_into_tiles_where_the_layer_has_no_pixels() {
+        let mut d = doc(300, 40);
+        d.layers[0].pixels.put_pixel(250, 20, [255, 255, 255, 255]);
+        let id = d.layers[0].id;
+        d.layer_mut(id).unwrap().styles =
+            vec![LayerStyle::DropShadow { color: [0, 0, 0], opacity: 1.0, angle_deg: 0.0, distance: 20.0, size: 0.0 }];
+        // La tuile x∈[256,300) n'a aucun pixel de calque mais reçoit l'ombre de (250,20) → (270,20).
+        assert_eq!(px(&d, 270, 20), [0, 0, 0, 255]);
+    }
+
+    #[test]
+    fn strokes_and_overlays_follow_the_shape() {
+        let (mut d, id) = square_doc();
+        d.layer_mut(id).unwrap().styles =
+            vec![LayerStyle::Stroke { color: [0, 255, 0], opacity: 1.0, size: 2.0, position: StrokePosition::Outside }];
+        assert_eq!(px(&d, 19, 25), [0, 255, 0, 255]);
+        assert_eq!(px(&d, 25, 25), [255, 0, 0, 255]);
+        d.layer_mut(id).unwrap().styles =
+            vec![LayerStyle::ColorOverlay { color: [0, 0, 255], opacity: 1.0, blend: BlendMode::Normal }];
+        assert_eq!(px(&d, 25, 25), [0, 0, 255, 255]);
+        assert_eq!(px(&d, 5, 5), [0, 0, 0, 0], "l'incrustation ne déborde pas de la forme");
+        d.layer_mut(id).unwrap().styles = vec![LayerStyle::GradientOverlay {
+            from: [0, 0, 0],
+            to: [255, 255, 255],
+            angle_deg: 0.0,
+            opacity: 1.0,
+            blend: BlendMode::Normal,
+        }];
+        assert!(px(&d, 21, 25)[0] < px(&d, 28, 25)[0], "le dégradé progresse de gauche à droite");
+    }
+
+    #[test]
+    fn fill_hides_the_content_but_not_the_styles_while_opacity_hides_everything() {
+        let (mut d, id) = square_doc();
+        d.layer_mut(id).unwrap().styles =
+            vec![LayerStyle::Stroke { color: [0, 255, 0], opacity: 1.0, size: 2.0, position: StrokePosition::Outside }];
+        d.layer_mut(id).unwrap().fill = 0.0;
+        assert_eq!(px(&d, 25, 25), [0, 0, 0, 0], "contenu masqué par le remplissage");
+        assert_eq!(px(&d, 19, 25), [0, 255, 0, 255], "contour conservé");
+        d.layer_mut(id).unwrap().opacity = 0.0;
+        assert_eq!(px(&d, 19, 25), [0, 0, 0, 0], "l'opacité masque aussi les styles");
+    }
+
+    #[test]
+    fn styles_respect_the_layer_mask() {
+        let (mut d, id) = square_doc();
+        let mut m = TileGrid::new(64, 64).unwrap();
+        for y in 20..30 {
+            for x in 20..25 {
+                m.put_pixel(x, y, [255; 4]);
+            }
+        }
+        d.layer_mut(id).unwrap().mask = Some(Mask { pixels: m, enabled: true });
+        d.layer_mut(id).unwrap().styles =
+            vec![LayerStyle::ColorOverlay { color: [0, 0, 255], opacity: 1.0, blend: BlendMode::Normal }];
+        assert_eq!(px(&d, 22, 25), [0, 0, 255, 255]);
+        assert_eq!(px(&d, 27, 25), [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn clipped_layers_stay_inside_the_base_shape_even_with_a_shadow() {
+        let (mut d, id) = square_doc();
+        d.layer_mut(id).unwrap().styles =
+            vec![LayerStyle::DropShadow { color: [0, 0, 0], opacity: 1.0, angle_deg: 0.0, distance: 8.0, size: 0.0 }];
+        let top = d.add_layer("écrêté", solid(64, 64, [0, 0, 255, 255]));
+        d.layer_mut(top).unwrap().clip_to_below = true;
+        assert_eq!(px(&d, 25, 25), [0, 0, 255, 255]);
+        assert_eq!(px(&d, 33, 25), [0, 0, 0, 255], "l'ombre n'est pas recouverte par le calque écrêté");
     }
 }

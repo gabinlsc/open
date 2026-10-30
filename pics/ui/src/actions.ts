@@ -127,6 +127,7 @@ export const ACTIONS: Record<string, ActionDef> = {
     },
     enabled: () => (st().snapshot?.layers.length ?? 0) > 1,
   },
+  "layer.transform": { label: "Transformer…", run: () => st().setDialog({ kind: "transform" }), enabled: () => activeLayer() !== null },
   "layer.mask_reveal": { label: "Ajouter un masque (tout révéler)", run: () => maskAdd(true), enabled: canAddMask },
   "layer.mask_hide": { label: "Ajouter un masque (tout masquer)", run: () => maskAdd(false), enabled: canAddMask },
   "tab.next": { label: "Onglet suivant", run: () => cycleTab(1) },

@@ -4,6 +4,7 @@ import { api, CommandError, type CursorEvent, type KeymapDto, type SettingsDto, 
 export type Dialog =
   | { kind: "new" }
   | { kind: "export" }
+  | { kind: "transform" }
   | { kind: "shortcuts" }
   | { kind: "confirmClose"; id: number; name: string }
   | null;

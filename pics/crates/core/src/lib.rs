@@ -12,6 +12,7 @@ pub mod geom;
 pub mod history;
 pub mod shortcuts;
 pub mod snap;
+pub mod styles;
 pub mod tile;
 pub mod view;
 
@@ -19,5 +20,6 @@ pub use blend::BlendMode;
 pub use document::{Axis, DocId, Document, Guide, Layer, LayerId, LayerProps, Locks, Mask};
 pub use error::CoreError;
 pub use geom::{IRect, Size, Vec2};
+pub use styles::LayerStyle;
 pub use tile::{TILE_SIZE, Tile, TileGrid, TileKey};
 pub use view::{ViewSettings, Viewport};

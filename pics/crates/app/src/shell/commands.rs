@@ -9,7 +9,7 @@ use tauri::State;
 use super::Shared;
 use crate::dto::{
     AppStatus, AxisDto, CanvasRect, GuideDrag, ImageOp, KeymapDto, LayerPropsDto, OpenResult, ResolvedTheme,
-    SettingsDto, Snapshot, ThemeChoice, Tool,
+    SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, TransformDto,
 };
 use crate::error::{ApiError, SessionError};
 use crate::session::Session;
@@ -200,6 +200,17 @@ pub fn layer_move(shared: State<'_, Shared>, id: u64, to: usize) -> ApiResult<Sn
 #[tauri::command]
 pub fn layer_set_props(shared: State<'_, Shared>, id: u64, props: LayerPropsDto) -> ApiResult<Snapshot> {
     mutate(&shared, |s| s.layer_set_props(id, &props))
+}
+
+#[tauri::command]
+pub fn layer_set_styles(shared: State<'_, Shared>, id: u64, styles: Vec<StyleDto>) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.layer_set_styles(id, &styles))
+}
+
+#[tauri::command]
+pub async fn layer_transform(shared: State<'_, Shared>, transform: TransformDto) -> ApiResult<Snapshot> {
+    // `async` : le rééchantillonnage d'un grand calque ne doit pas figer le thread principal.
+    mutate(&shared, |s| s.layer_transform(&transform).map(|_| ()))
 }
 
 #[tauri::command]

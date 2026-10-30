@@ -43,6 +43,7 @@ export function MenuBar() {
       items: [
         { action: "layer.new" },
         { action: "layer.delete" },
+        { action: "layer.transform" },
         { sep: true },
         { action: "layer.mask_reveal" },
         { action: "layer.mask_hide" },

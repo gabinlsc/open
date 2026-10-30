@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use openpics_core::commands::{
     AddGuide, AddLayer, AddMask, ClearGuides, MoveLayer, RemoveGuide, RemoveLayer, RemoveMask, SetLayerProps,
-    SetMaskEnabled,
+    SetLayerStyles, SetMaskEnabled,
 };
 use openpics_core::shortcuts::{Chord, Keymap};
 use openpics_core::snap::snap_axis;
@@ -15,10 +15,11 @@ use openpics_core::view::next_zoom_step;
 use openpics_core::{Axis, DocId, Document, Layer, LayerId, Size, TileGrid, Vec2, ViewSettings, Viewport};
 use openpics_io::ExportOptions;
 use openpics_ops::Op;
+use openpics_ops::transform::Matrix3;
 
 use crate::dto::{
     DocSummary, GuideDrag, GuideDto, HistoryDto, ImageOp, KeymapDto, LayerDto, LayerPropsDto, ResolvedTheme,
-    SettingsDto, Snapshot, Tool, ViewState, blend_infos,
+    SettingsDto, Snapshot, StyleDto, Tool, TransformDto, ViewState, blend_infos,
 };
 use crate::error::SessionError;
 
@@ -430,6 +431,46 @@ impl Session {
         }
         e.doc.execute(Box::new(SetLayerProps::new(describe_change(&current, &next), LayerId(id), next)))?;
         Ok(())
+    }
+
+    pub fn layer_set_styles(&mut self, id: u64, styles: &[StyleDto]) -> Result<(), SessionError> {
+        const MAX_STYLES: usize = 16;
+        if styles.len() > MAX_STYLES {
+            return Err(SessionError::InvalidArgument(format!("au plus {MAX_STYLES} styles par calque")));
+        }
+        let parsed = styles
+            .iter()
+            .map(|s| {
+                s.to_style().ok_or_else(|| {
+                    SessionError::InvalidArgument("couleur ou mode de fusion invalide dans un style".into())
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let e = self.entry_mut()?;
+        if e.doc.layer(LayerId(id))?.styles == parsed {
+            return Ok(());
+        }
+        e.doc.execute(Box::new(SetLayerStyles::new("Styles de calque", LayerId(id), parsed)))?;
+        Ok(())
+    }
+
+    /// Transformation du calque actif autour du centre du document. Renvoie `false` si rien n'a changé.
+    pub fn layer_transform(&mut self, t: &TransformDto) -> Result<bool, SessionError> {
+        let ok = |v: f64, lo: f64, hi: f64| v.is_finite() && (lo..=hi).contains(&v);
+        if !ok(t.scale_x, 1.0, 1000.0) || !ok(t.scale_y, 1.0, 1000.0) {
+            return Err(SessionError::InvalidArgument("l'échelle doit être comprise entre 1 % et 1000 %".into()));
+        }
+        if !ok(t.rotation_deg, -360.0, 360.0) || !ok(t.translate_x, -1e5, 1e5) || !ok(t.translate_y, -1e5, 1e5) {
+            return Err(SessionError::InvalidArgument("rotation ou déplacement hors limites".into()));
+        }
+        let e = self.entry_mut()?;
+        let layer = e.active_layer.ok_or_else(|| SessionError::InvalidArgument("aucun calque sélectionné".into()))?;
+        let size = e.doc.size();
+        let (cx, cy) = (f64::from(size.width) / 2.0, f64::from(size.height) / 2.0);
+        let m = Matrix3::translate(t.translate_x, t.translate_y)
+            .then_after(&Matrix3::rotate(t.rotation_deg).about(cx, cy))
+            .then_after(&Matrix3::scale(t.scale_x / 100.0, t.scale_y / 100.0).about(cx, cy));
+        Ok(openpics_ops::apply_transform(&mut e.doc, layer, &m)?)
     }
 
     pub fn mask_add(&mut self, id: u64, reveal: bool) -> Result<(), SessionError> {
@@ -879,5 +920,58 @@ mod tests {
         let doc = s.render_state().document.unwrap();
         assert_eq!(doc.layers[0].pixels.get_pixel(0, 0), [0, 0, 0, 255]);
         assert_eq!(doc.layers[1].pixels.tile_count(), 0);
+    }
+
+    #[test]
+    fn styles_are_validated_and_undoable_through_the_session() {
+        let mut s = session();
+        s.new_document(None, 20, 20).unwrap();
+        let id = s.snapshot().layers[0].id;
+        let glow = StyleDto::OuterGlow { color: "#ffcc00".into(), opacity: 0.8, size: 6.0 };
+        s.layer_set_styles(id, std::slice::from_ref(&glow)).unwrap();
+        assert_eq!(s.snapshot().layers[0].styles, vec![glow.clone()]);
+        let bad = StyleDto::OuterGlow { color: "jaune".into(), opacity: 1.0, size: 1.0 };
+        assert!(matches!(s.layer_set_styles(id, &[bad]), Err(SessionError::InvalidArgument(_))));
+        assert!(matches!(s.layer_set_styles(id, &vec![glow.clone(); 17]), Err(SessionError::InvalidArgument(_))));
+        let before = s.snapshot().history.names.len();
+        s.layer_set_styles(id, &[glow]).unwrap();
+        assert_eq!(s.snapshot().history.names.len(), before, "pas d'état d'historique si rien ne change");
+        s.undo().unwrap();
+        assert!(s.snapshot().layers[0].styles.is_empty());
+    }
+
+    #[test]
+    fn transform_acts_on_the_active_layer_around_the_centre_and_validates_input() {
+        let mut s = session();
+        s.new_document(None, 64, 64).unwrap();
+        let id = s.snapshot().layers[0].id;
+        s.layer_add().unwrap();
+        s.layer_select(id).unwrap();
+        let identity =
+            TransformDto { scale_x: 100.0, scale_y: 100.0, rotation_deg: 0.0, translate_x: 0.0, translate_y: 0.0 };
+        s.layer_transform(&identity).unwrap();
+        // Un demi-tour autour du centre laisse un calque uni identique, puis on décale de 10 px.
+        let half_turn = TransformDto { rotation_deg: 180.0, ..identity };
+        s.layer_transform(&half_turn).unwrap();
+        let moved = TransformDto { translate_x: 10.0, ..identity };
+        s.layer_transform(&moved).unwrap();
+        let doc = s.render_state().document.unwrap();
+        assert_eq!(doc.layers[0].pixels.get_pixel(5, 30), [0; 4], "10 px de la bande gauche sont maintenant vides");
+        assert_eq!(doc.layers[0].pixels.get_pixel(30, 30), [255; 4]);
+        for bad in [
+            TransformDto { scale_x: 0.0, ..identity },
+            TransformDto { scale_y: f64::NAN, ..identity },
+            TransformDto { rotation_deg: 1e9, ..identity },
+            TransformDto { translate_x: f64::INFINITY, ..identity },
+        ] {
+            assert!(matches!(s.layer_transform(&bad), Err(SessionError::InvalidArgument(_))));
+        }
+        // Verrou de position : la transformation est refusée avec un message clair.
+        let mut p = props(&s);
+        p.name = s.snapshot().layers.iter().find(|l| l.id == id).unwrap().name.clone();
+        p.locks.position = true;
+        s.layer_set_props(id, &p).unwrap();
+        let err = s.layer_transform(&moved).unwrap_err().to_string();
+        assert!(err.contains("verrouillé"), "{err}");
     }
 }

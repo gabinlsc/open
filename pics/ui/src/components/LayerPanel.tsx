@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type LayerDto, type LayerPropsDto } from "../api";
 import { useStore } from "../store";
+import { StylePanel } from "./StylePanel";
 
 function propsOf(l: LayerDto, patch: Partial<LayerPropsDto> = {}): LayerPropsDto {
   return { name: l.name, visible: l.visible, opacity: l.opacity, fill: l.fill, blend: l.blend, locks: l.locks, clipToBelow: l.clipToBelow, ...patch };
@@ -94,6 +95,7 @@ export function LayerPanel() {
             <label><input type="checkbox" checked={active.locks.all} onChange={(e) => patch(active, { locks: { ...active.locks, all: e.target.checked } })} /> Tout</label>
             <label><input type="checkbox" checked={active.clipToBelow} onChange={(e) => patch(active, { clipToBelow: e.target.checked })} /> Écrêter sur le calque du dessous</label>
           </fieldset>
+          <StylePanel layer={active} />
           <div className="row wrap">
             {active.hasMask ? (
               <>

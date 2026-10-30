@@ -25,6 +25,8 @@ interface UiState {
   dialog: Dialog;
   /** Un menu déroulant est ouvert : il recouvre la zone du canvas natif. */
   menuOpen: boolean;
+  /** Filtre en cours d'aperçu (panneau ancré : le canvas reste visible). */
+  filter: { id: string; values: number[] } | null;
   notice: Notice | null;
   version: string;
   portable: boolean;
@@ -35,6 +37,7 @@ interface UiState {
   setCursor(c: CursorEvent | null): void;
   setDialog(d: Dialog): void;
   setMenuOpen(open: boolean): void;
+  setFilter(f: { id: string; values: number[] } | null): void;
   notify(n: Notice | null): void;
   /** Exécute une commande IPC et applique son résultat ; toute erreur devient une notification. */
   run(task: () => Promise<Snapshot>): Promise<boolean>;
@@ -57,6 +60,7 @@ export const useStore = create<UiState>()((set, get) => ({
   cursor: null,
   dialog: null,
   menuOpen: false,
+  filter: null,
   notice: null,
   version: "",
   portable: false,
@@ -92,6 +96,10 @@ export const useStore = create<UiState>()((set, get) => ({
 
   setMenuOpen(menuOpen) {
     set({ menuOpen });
+  },
+
+  setFilter(filter) {
+    set({ filter });
   },
 
   notify(notice) {

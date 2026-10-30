@@ -259,6 +259,25 @@ pub async fn adjustment_match(shared: State<'_, Shared>, id: u64, source: u64, r
 }
 
 #[tauri::command]
+pub async fn filter_preview(shared: State<'_, Shared>, id: String, values: Vec<f32>) -> ApiResult<Snapshot> {
+    // Asynchrone : un filtre sur un grand calque ne doit pas figer le thread principal.
+    mutate(&shared, |s| s.filter_preview(&id, &values))
+}
+
+#[tauri::command]
+pub fn filter_commit(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
+    mutate(&shared, Session::filter_commit)
+}
+
+#[tauri::command]
+pub fn filter_cancel(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| {
+        s.filter_cancel();
+        Ok(())
+    })
+}
+
+#[tauri::command]
 pub fn mask_add(shared: State<'_, Shared>, id: u64, reveal: bool) -> ApiResult<Snapshot> {
     mutate(&shared, |s| s.mask_add(id, reveal))
 }

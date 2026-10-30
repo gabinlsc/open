@@ -61,6 +61,7 @@ pub enum Tool {
     Dodge,
     Burn,
     Sponge,
+    Liquify,
 }
 
 /// Réglages des outils de sélection.
@@ -220,6 +221,7 @@ pub struct Snapshot {
     pub active_layer_id: Option<u64>,
     pub blend_modes: Vec<BlendInfo>,
     pub has_selection: bool,
+    pub filters: Vec<FilterInfoDto>,
     pub adjustment_kinds: Vec<BlendInfo>,
     pub tool_options: ToolOptionsDto,
     pub paint_options: PaintOptionsDto,
@@ -431,6 +433,17 @@ mod tests {
     }
 
     #[test]
+    fn every_registered_filter_is_exposed_with_defaults_inside_their_range() {
+        let infos = filter_infos();
+        assert_eq!(infos.len(), openpics_ops::filters::REGISTRY.len());
+        assert!(
+            infos
+                .iter()
+                .all(|f| f.params.iter().all(|p| p.value >= p.min && p.value <= p.max) && !f.category.is_empty())
+        );
+    }
+
+    #[test]
     fn adjustment_kind_ids_roundtrip_and_dtos_expose_every_parameter() {
         for k in AdjKind::ALL {
             assert_eq!(parse_adj_kind(&adj_kind_id(k)), Some(k));
@@ -617,6 +630,7 @@ pub struct PaintOptionsDto {
     pub tonal_range: TonalRangeDto,
     /// Éponge : `true` = saturer, `false` = désaturer.
     pub saturate: bool,
+    pub liquify_mode: LiquifyModeDto,
 }
 
 impl Default for PaintOptionsDto {
@@ -636,6 +650,7 @@ impl Default for PaintOptionsDto {
             gradient_to_transparent: false,
             tonal_range: TonalRangeDto::Midtones,
             saturate: true,
+            liquify_mode: LiquifyModeDto::Push,
         }
     }
 }
@@ -761,4 +776,48 @@ impl From<&Adjustment> for AdjustmentDto {
             is_color_match: a.kind == AdjKind::ColorMatch,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum LiquifyModeDto {
+    Push,
+    Bloat,
+    Pucker,
+    Twirl,
+    Reconstruct,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct FilterInfoDto {
+    pub id: String,
+    pub label: String,
+    pub category: String,
+    /// Paramètres avec leur plage ; `value` est la valeur par défaut.
+    pub params: Vec<ParamDto>,
+}
+
+pub fn filter_infos() -> Vec<FilterInfoDto> {
+    openpics_ops::filters::REGISTRY
+        .iter()
+        .map(|f| FilterInfoDto {
+            id: f.id.to_owned(),
+            label: f.label.to_owned(),
+            category: f.category.label().to_owned(),
+            params: f
+                .params
+                .iter()
+                .map(|p| ParamDto {
+                    id: p.id.to_owned(),
+                    label: p.label.to_owned(),
+                    min: p.min,
+                    max: p.max,
+                    value: p.default,
+                })
+                .collect(),
+        })
+        .collect()
 }

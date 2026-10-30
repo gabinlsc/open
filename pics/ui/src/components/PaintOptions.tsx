@@ -4,7 +4,7 @@ import { useStore } from "../store";
 import { parseNumber } from "../styles";
 import { Percent } from "./LayerPanel";
 
-const BRUSH_TOOLS: Tool[] = ["brush", "pencil", "eraser", "clone_stamp", "heal", "blur", "sharpen", "smudge", "dodge", "burn", "sponge", "spot_heal"];
+const BRUSH_TOOLS: Tool[] = ["brush", "pencil", "eraser", "clone_stamp", "heal", "blur", "sharpen", "smudge", "dodge", "burn", "sponge", "spot_heal", "liquify"];
 const OPACITY_TOOLS: Tool[] = [...BRUSH_TOOLS, "gradient", "bucket"];
 const COLOR_TOOLS: Tool[] = ["brush", "pencil", "bucket", "gradient"];
 
@@ -76,6 +76,18 @@ export function PaintOptions() {
             <option value="shadows">Ombres</option>
             <option value="midtones">Tons moyens</option>
             <option value="highlights">Hautes lumières</option>
+          </select>
+        </label>
+      )}
+      {tool === "liquify" && (
+        <label className="field">
+          Mode
+          <select value={o.liquifyMode} onChange={(e) => set({ liquifyMode: e.target.value as PaintOptionsDto["liquifyMode"] })}>
+            <option value="push">Pousser</option>
+            <option value="bloat">Gonfler</option>
+            <option value="pucker">Pincer</option>
+            <option value="twirl">Tourbillon</option>
+            <option value="reconstruct">Reconstruire</option>
           </select>
         </label>
       )}

@@ -9,6 +9,7 @@ import type { AxisDto } from "./gen/AxisDto";
 import type { BlendInfo } from "./gen/BlendInfo";
 import type { CanvasRect } from "./gen/CanvasRect";
 import type { CursorEvent } from "./gen/CursorEvent";
+import type { FilterInfoDto } from "./gen/FilterInfoDto";
 import type { GuideDrag } from "./gen/GuideDrag";
 import type { ImageOp } from "./gen/ImageOp";
 import type { KeymapDto } from "./gen/KeymapDto";
@@ -25,7 +26,7 @@ import type { TransformDto } from "./gen/TransformDto";
 import type { Tool } from "./gen/Tool";
 import type { ToolOptionsDto } from "./gen/ToolOptionsDto";
 
-export type { AdjustmentDto, AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, PaintOptionsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
+export type { FilterInfoDto, AdjustmentDto, AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, PaintOptionsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
 
 /** Erreur typée côté TS : `code` est stable, `message` est affichable tel quel. */
 export class CommandError extends Error {
@@ -87,6 +88,9 @@ export const api = {
   adjustmentSetStops: (id: number, stops: [number, string][]) => call<Snapshot>("adjustment_set_stops", { id, stops }),
   adjustmentLoadLut: (id: number, path: string) => call<Snapshot>("adjustment_load_lut", { id, path }),
   adjustmentMatch: (id: number, source: number, reference: number) => call<Snapshot>("adjustment_match", { id, source, reference }),
+  filterPreview: (id: string, values: number[]) => call<Snapshot>("filter_preview", { id, values }),
+  filterCommit: () => call<Snapshot>("filter_commit"),
+  filterCancel: () => call<Snapshot>("filter_cancel"),
   maskAdd: (id: number, reveal: boolean) => call<Snapshot>("mask_add", { id, reveal }),
   maskRemove: (id: number) => call<Snapshot>("mask_remove", { id }),
   maskSetEnabled: (id: number, enabled: boolean) => call<Snapshot>("mask_set_enabled", { id, enabled }),

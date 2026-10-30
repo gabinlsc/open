@@ -76,6 +76,7 @@ impl Session {
     }
 
     pub fn pointer_down(&mut self, p: &Pointer) -> Result<(), SessionError> {
+        self.filter_cancel();
         if !self.has_document() {
             return Ok(());
         }

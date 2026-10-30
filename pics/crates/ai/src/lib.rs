@@ -9,5 +9,7 @@
 
 pub mod catalog;
 pub mod classic;
+#[cfg(feature = "onnx")]
+pub mod onnx;
 
 pub use catalog::{AiError, ModelEntry, ModelStore, Task};

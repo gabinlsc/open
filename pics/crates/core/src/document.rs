@@ -230,6 +230,8 @@ pub struct Document {
     history: History,
     revision: u64,
     next_id: u64,
+    /// Nombre d'états annulés par la comparaison avant/après ; `Some` = document gelé sur l'original.
+    comparing: Option<usize>,
 }
 
 impl Document {
@@ -247,12 +249,17 @@ impl Document {
             history: History::default(),
             revision: 0,
             next_id: 1,
+            comparing: None,
         };
         doc.add_layer("Arrière-plan", background);
         Ok(doc)
     }
 
     /// Taille du canevas, indépendante des calques : supprimer tous les calques ne la change pas.
+    pub(crate) fn set_size(&mut self, size: Size) {
+        self.size = size;
+    }
+
     pub fn size(&self) -> Size {
         self.size
     }
@@ -338,6 +345,7 @@ impl Document {
             history: History::default(),
             revision: self.revision,
             next_id: self.next_id,
+            comparing: self.comparing,
         }
     }
 
@@ -349,6 +357,32 @@ impl Document {
     /// changé, indépendamment de l'état « enregistré ».
     pub fn touch(&mut self) {
         self.revision += 1;
+    }
+
+    pub fn is_comparing(&self) -> bool {
+        self.comparing.is_some()
+    }
+
+    /// Comparaison avant/après : revient à l'état d'ouverture (tout est annulé) et gèle le document. `end_compare`
+    /// rétablit exactement ce qui avait été annulé ; entre les deux, toute modification est refusée.
+    pub fn begin_compare(&mut self) -> Result<(), CoreError> {
+        if self.comparing.is_some() {
+            return Ok(());
+        }
+        let mut undone = 0;
+        while self.undo_inner()? {
+            undone += 1;
+        }
+        self.comparing = Some(undone);
+        Ok(())
+    }
+
+    pub fn end_compare(&mut self) -> Result<(), CoreError> {
+        let Some(n) = self.comparing.take() else { return Ok(()) };
+        for _ in 0..n {
+            self.redo_inner()?;
+        }
+        Ok(())
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -369,6 +403,9 @@ impl Document {
     }
 
     pub fn execute(&mut self, mut command: Box<dyn Command>) -> Result<(), CoreError> {
+        if self.comparing.is_some() {
+            return Err(CoreError::Comparing);
+        }
         command.apply(self)?;
         self.history.record(command);
         self.touch();
@@ -377,6 +414,13 @@ impl Document {
 
     /// `Ok(false)` s'il n'y a rien à annuler. Une commande qui échoue au `revert` reste en pile.
     pub fn undo(&mut self) -> Result<bool, CoreError> {
+        if self.comparing.is_some() {
+            return Err(CoreError::Comparing);
+        }
+        self.undo_inner()
+    }
+
+    fn undo_inner(&mut self) -> Result<bool, CoreError> {
         let Some(mut cmd) = self.history.take_undo() else {
             return Ok(false);
         };
@@ -394,6 +438,13 @@ impl Document {
     }
 
     pub fn redo(&mut self) -> Result<bool, CoreError> {
+        if self.comparing.is_some() {
+            return Err(CoreError::Comparing);
+        }
+        self.redo_inner()
+    }
+
+    fn redo_inner(&mut self) -> Result<bool, CoreError> {
         let Some(mut cmd) = self.history.take_redo() else {
             return Ok(false);
         };
@@ -443,6 +494,45 @@ mod tests {
         // Revenir à l'état enregistré (par redo) n'est plus une modification.
         assert!(d.redo().unwrap());
         assert!(!d.is_dirty());
+    }
+
+    #[test]
+    fn compare_shows_the_original_freezes_edits_and_restores_everything() {
+        let mut d = doc();
+        d.execute(Box::new(AddGuide::new(Axis::Vertical, 1.0))).unwrap();
+        d.execute(Box::new(AddGuide::new(Axis::Horizontal, 2.0))).unwrap();
+        d.mark_saved();
+        d.begin_compare().unwrap();
+        assert!(d.guides.is_empty(), "l'original n'a pas les repères");
+        assert!(d.is_comparing());
+        assert!(matches!(d.execute(Box::new(AddGuide::new(Axis::Vertical, 9.0))), Err(CoreError::Comparing)));
+        assert!(matches!(d.undo(), Err(CoreError::Comparing)));
+        assert!(matches!(d.redo(), Err(CoreError::Comparing)));
+        d.begin_compare().unwrap(); // idempotent
+        d.end_compare().unwrap();
+        assert_eq!(d.guides.len(), 2);
+        assert!(!d.is_dirty(), "revenir de la comparaison rend l'état enregistré");
+        d.end_compare().unwrap(); // idempotent
+        assert!(d.undo().unwrap(), "l'historique est intact");
+    }
+
+    #[test]
+    fn replace_doc_state_swaps_size_layers_and_undoes() {
+        use crate::commands::{DocState, ReplaceDocState};
+        let mut d = doc();
+        let before = d.size();
+        let bigger = Size::new(before.width * 2, before.height * 2);
+        let layer = Layer::new(LayerId(1), "L", TileGrid::new(bigger.width, bigger.height).unwrap());
+        d.execute(Box::new(ReplaceDocState::new(
+            "Taille",
+            DocState { size: bigger, layers: vec![layer], guides: vec![], selection: None },
+        )))
+        .unwrap();
+        assert_eq!(d.size(), bigger);
+        assert!(d.undo().unwrap());
+        assert_eq!(d.size(), before);
+        assert!(d.redo().unwrap());
+        assert_eq!(d.size(), bigger);
     }
 
     #[test]

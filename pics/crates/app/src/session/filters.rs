@@ -12,6 +12,7 @@ pub(super) struct FilterPreview {
     layer: LayerId,
     base: TileGrid,
     filter: &'static filters::FilterDef,
+    values: Vec<f32>,
 }
 
 impl Session {
@@ -33,7 +34,11 @@ impl Session {
             if l.locks.blocks_painting() {
                 return Err(openpics_core::CoreError::LayerLocked(l.name.clone()).into());
             }
-            self.filter_preview = Some(FilterPreview { layer, base: l.pixels.clone(), filter: def });
+            self.filter_preview =
+                Some(FilterPreview { layer, base: l.pixels.clone(), filter: def, values: Vec::new() });
+        }
+        if let Some(p) = &mut self.filter_preview {
+            p.values = values.to_vec();
         }
         let Some(preview) = &self.filter_preview else { return Ok(()) };
         let (layer, base) = (preview.layer, preview.base.clone());
@@ -54,6 +59,7 @@ impl Session {
         match ReplaceTiles::between(p.filter.label, p.layer, &p.base, &after) {
             Some(cmd) => {
                 self.entry_mut()?.doc.execute(Box::new(cmd))?;
+                self.record(super::script::Step::Filter(p.filter.id.to_owned(), p.filter.clamp_values(&p.values)));
             }
             None => {
                 let e = self.entry_mut()?;

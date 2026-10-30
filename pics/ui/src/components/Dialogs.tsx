@@ -6,6 +6,7 @@ import { ACTIONS } from "../actions";
 import { chordFromEvent, prettyChord } from "../keys";
 import { activeDoc, errorText, useStore } from "../store";
 import { AiModelsDialog, AiSubjectDialog } from "./AiDialogs";
+import { BrowserDialog, ExportScalesDialog, ResizeDialog, ScriptsDialog } from "./ToolDialogs";
 import { BatchDialog, PaletteDialog, RecoveryDialog } from "./ProductivityDialogs";
 import { Modal } from "./Modal";
 
@@ -286,6 +287,14 @@ export function Dialogs() {
       return <ExportDialog />;
     case "shortcuts":
       return <ShortcutsDialog />;
+    case "resize":
+      return <ResizeDialog />;
+    case "exportScales":
+      return <ExportScalesDialog />;
+    case "scripts":
+      return <ScriptsDialog />;
+    case "browser":
+      return <BrowserDialog />;
     case "palette":
       return <PaletteDialog />;
     case "recovery":

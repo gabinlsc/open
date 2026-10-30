@@ -17,7 +17,7 @@ defaults:
 
 jobs:
   rust:
-    name: Rust (Linux : fmt, clippy, tests)
+    name: "Rust (Linux : fmt, clippy, tests)"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +34,7 @@ jobs:
       # L'app Tauri n'est lintée ici que pour sa logique ; la coque l'est dans le job Windows.
       - run: cargo clippy --workspace --exclude openpics-app --all-targets -- -D warnings
       - run: cargo clippy -p openpics-app --no-default-features --all-targets -- -D warnings
-      - name: Tests (le GPU logiciel est obligatoire : pas de test de rendu « vert » car ignoré)
+      - name: "Tests (le GPU logiciel est obligatoire : pas de test de rendu « vert » car ignoré)"
         run: cargo test --workspace --exclude openpics-app
         env:
           OPENPICS_REQUIRE_GPU: "1"
@@ -42,6 +42,16 @@ jobs:
         run: cargo test -p openpics-app --no-default-features
         env:
           OPENPICS_REQUIRE_FONTS: "1"
+      - name: Inférence ONNX (ONNX Runtime réel, modèle jouet)
+        run: |
+          python3 -m pip install onnx onnxruntime numpy
+          python3 crates/ai/tests/make_toy_model.py "$RUNNER_TEMP/toy.onnx"
+          export ORT_DYLIB_PATH="$(python3 -c 'import glob,os,onnxruntime;print(glob.glob(os.path.join(os.path.dirname(onnxruntime.__file__),"capi","libonnxruntime.so*"))[0])')"
+          cargo test -p openpics-ai --features onnx
+          cargo test -p openpics-app --no-default-features --features onnx session::ai
+        env:
+          OPENPICS_REQUIRE_ORT: "1"
+          OPENPICS_TEST_ONNX: ${{ runner.temp }}/toy.onnx
       - name: Les types TypeScript générés sont à jour
         run: git diff --exit-code -- ui/src/gen
 

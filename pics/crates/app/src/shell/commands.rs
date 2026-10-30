@@ -461,13 +461,21 @@ pub fn keymap_reset(shared: State<'_, Shared>) -> ApiResult<KeymapDto> {
 }
 
 #[tauri::command]
-pub async fn ai_select_subject(shared: State<'_, Shared>, tolerance: f32) -> ApiResult<Snapshot> {
-    mutate(&shared, |s| s.ai_select_subject(tolerance))
+pub async fn ai_select_subject(
+    shared: State<'_, Shared>,
+    tolerance: f32,
+    model: Option<String>,
+) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.ai_select_subject_with(tolerance, model.as_deref()))
 }
 
 #[tauri::command]
-pub async fn ai_remove_background(shared: State<'_, Shared>, tolerance: f32) -> ApiResult<Snapshot> {
-    mutate(&shared, |s| s.ai_remove_background(tolerance))
+pub async fn ai_remove_background(
+    shared: State<'_, Shared>,
+    tolerance: f32,
+    model: Option<String>,
+) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.ai_remove_background_with(tolerance, model.as_deref()))
 }
 
 #[tauri::command]
@@ -482,6 +490,10 @@ fn model_list(shared: &Shared) -> Result<Vec<crate::dto::ModelDto>, SessionError
         .into_iter()
         .map(|m| crate::dto::ModelDto {
             installed: store.is_installed(&m.id),
+            isolates_subject: matches!(
+                m.task,
+                openpics_ai::Task::BackgroundRemoval | openpics_ai::Task::SubjectSelection
+            ),
             task: m.task.label().to_string(),
             id: m.id,
             name: m.name,
@@ -549,4 +561,71 @@ pub async fn batch_run(
     .await
     .map_err(|e| SessionError::InvalidArgument(e.to_string()))??;
     Ok(report)
+}
+
+#[tauri::command]
+pub fn image_resize(shared: State<'_, Shared>, width: u32, height: u32) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.image_resize(width, height))
+}
+
+#[tauri::command]
+pub async fn export_scales(
+    shared: State<'_, Shared>,
+    path: String,
+    scales: Vec<f64>,
+    jpeg_quality: Option<u8>,
+) -> ApiResult<Vec<String>> {
+    let session = shared.lock()?;
+    let files = session.export_scales(std::path::Path::new(&path), &scales, jpeg_quality)?;
+    Ok(files.into_iter().map(|f| f.display().to_string()).collect())
+}
+
+#[tauri::command]
+pub fn compare_set(shared: State<'_, Shared>, on: bool) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.compare_set(on))
+}
+
+#[tauri::command]
+pub fn script_run(shared: State<'_, Shared>, source: String) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.script_run(&source).map(|_| ()))
+}
+
+#[tauri::command]
+pub fn record_start(shared: State<'_, Shared>) -> ApiResult<()> {
+    shared.lock()?.record_start();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn record_stop(shared: State<'_, Shared>) -> ApiResult<String> {
+    Ok(shared.lock()?.record_stop())
+}
+
+#[tauri::command]
+pub fn actions_list(shared: State<'_, Shared>) -> Vec<String> {
+    crate::saved_actions::list(&shared.actions_dir)
+}
+
+#[tauri::command]
+pub fn actions_load(shared: State<'_, Shared>, name: String) -> ApiResult<String> {
+    Ok(crate::saved_actions::load(&shared.actions_dir, &name)?)
+}
+
+#[tauri::command]
+pub fn actions_save(shared: State<'_, Shared>, name: String, script: String) -> ApiResult<Vec<String>> {
+    crate::saved_actions::save(&shared.actions_dir, &name, &script)?;
+    Ok(crate::saved_actions::list(&shared.actions_dir))
+}
+
+#[tauri::command]
+pub fn actions_delete(shared: State<'_, Shared>, name: String) -> ApiResult<Vec<String>> {
+    crate::saved_actions::delete(&shared.actions_dir, &name)?;
+    Ok(crate::saved_actions::list(&shared.actions_dir))
+}
+
+/// Explorateur : les images d'un dossier (non récursif).
+#[tauri::command]
+pub async fn folder_images(dir: String) -> ApiResult<Vec<String>> {
+    let files = crate::batch::list_images(std::path::Path::new(&dir))?;
+    Ok(files.into_iter().map(|f| f.display().to_string()).collect())
 }

@@ -208,7 +208,9 @@ impl Session {
 
     pub fn select_all(&mut self) -> Result<(), SessionError> {
         let size = self.entry()?.doc.size();
-        self.commit_selection("Tout sélectionner", selection::select_all(size.width, size.height)?)
+        self.commit_selection("Tout sélectionner", selection::select_all(size.width, size.height)?)?;
+        self.record(super::script::Step::SelectAll);
+        Ok(())
     }
 
     pub fn deselect(&mut self) -> Result<(), SessionError> {
@@ -216,6 +218,7 @@ impl Session {
             return Ok(());
         }
         self.entry_mut()?.doc.execute(Box::new(SetSelection::new("Désélectionner", None)))?;
+        self.record(super::script::Step::Deselect);
         Ok(())
     }
 
@@ -225,7 +228,9 @@ impl Session {
             Some(m) => selection::invert(m)?,
             None => selection::select_all(size.width, size.height)?,
         };
-        self.commit_selection("Inverser la sélection", inverted)
+        self.commit_selection("Inverser la sélection", inverted)?;
+        self.record(super::script::Step::InvertSelection);
+        Ok(())
     }
 
     pub(super) fn selection_required(&self) -> Result<TileGrid, SessionError> {

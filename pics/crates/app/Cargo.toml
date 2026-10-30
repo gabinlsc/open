@@ -17,9 +17,10 @@ path = "src/main.rs"
 required-features = ["shell"]
 
 [features]
-default = ["shell"]
+default = ["shell", "onnx"]
 # La coque (Tauri, canvas natif, rendu) exige WebView2 sous Windows ; sans elle, la logique
 # de session se teste sur n'importe quelle plateforme (`--no-default-features`).
+onnx = ["openpics-ai/onnx"]
 shell = ["dep:tauri", "dep:tauri-plugin-dialog", "dep:openpics-gpu", "dep:raw-window-handle", "dep:windows-sys"]
 
 [dependencies]
@@ -31,6 +32,7 @@ openpics-gpu = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+rhai = { version = "1", default-features = false, features = ["sync", "no_module"] }
 ts-rs = "11"
 tauri = { version = "2", optional = true }
 tauri-plugin-dialog = { version = "2", optional = true }

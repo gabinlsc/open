@@ -236,6 +236,8 @@ pub struct Snapshot {
     pub can_redo: bool,
     pub settings: SettingsDto,
     pub tool: Tool,
+    /// Le document affiché est son original (comparaison avant/après) : il est gelé.
+    pub comparing: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, TS)]
@@ -974,4 +976,6 @@ pub struct ModelDto {
     #[ts(type = "number")]
     pub size_bytes: u64,
     pub installed: bool,
+    /// Sait isoler un sujet (suppression d'arrière-plan ou sélection du sujet).
+    pub isolates_subject: bool,
 }

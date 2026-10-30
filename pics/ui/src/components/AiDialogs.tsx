@@ -9,10 +9,16 @@ const close = () => useStore.getState().setDialog(null);
 /** Sélection du sujet / suppression de l'arrière-plan : méthode classique, sans modèle. */
 export function AiSubjectDialog({ remove }: { remove: boolean }) {
   const [tolerance, setTolerance] = useState(15);
+  const [models, setModels] = useState<ModelDto[]>([]);
+  const [model, setModel] = useState("");
+  useEffect(() => {
+    api.aiModels().then((m) => setModels(m.filter((x) => x.installed && x.isolatesSubject))).catch(() => undefined);
+  }, []);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const t = tolerance / 100;
-    if (await useStore.getState().run(() => (remove ? api.aiRemoveBackground(t) : api.aiSelectSubject(t)))) close();
+    const id = model || null;
+    if (await useStore.getState().run(() => (remove ? api.aiRemoveBackground(t, id) : api.aiSelectSubject(t, id)))) close();
   };
   return (
     <Modal title={remove ? "Supprimer l'arrière-plan" : "Sélectionner le sujet"} onClose={close}>
@@ -22,9 +28,18 @@ export function AiSubjectDialog({ remove }: { remove: boolean }) {
           complexe.{remove ? " Un masque est ajouté au calque ; le retirer rend le fond." : ""}
         </p>
         <label>
-          Tolérance du fond : {tolerance} %
-          <input type="range" min={1} max={60} value={tolerance} onChange={(e) => setTolerance(Number(e.target.value))} />
+          Méthode
+          <select value={model} onChange={(e) => setModel(e.target.value)}>
+            <option value="">Classique (fond estimé depuis les bords)</option>
+            {models.map((m) => <option key={m.id} value={m.id}>Modèle : {m.name}</option>)}
+          </select>
         </label>
+        {model === "" && (
+          <label>
+            Tolérance du fond : {tolerance} %
+            <input type="range" min={1} max={60} value={tolerance} onChange={(e) => setTolerance(Number(e.target.value))} />
+          </label>
+        )}
         <div className="actions">
           <button type="button" className="btn secondary" onClick={close}>Annuler</button>
           <button type="submit" className="btn">Appliquer</button>
@@ -61,8 +76,9 @@ export function AiModelsDialog() {
         <p className="hint">
           Aucun modèle n'est livré ni téléchargé par le logiciel. Les modèles se déclarent dans le fichier
           <code> models.json </code> du dossier de configuration (identifiant, tâche, licence, source, empreinte SHA-256), puis
-          s'importent depuis un fichier : une empreinte différente est refusée. Cette version enregistre les modèles mais ne les
-          exécute pas encore ; les fonctions du menu IA utilisent des méthodes classiques.
+          s'importent depuis un fichier : une empreinte différente est refusée. Les modèles de suppression d'arrière-plan / de sujet (type U²-Net, entrée image, sortie carte de probabilité) s'exécutent avec
+          ONNX Runtime, à fournir séparément (<code>onnxruntime.dll</code> à côté de l'exécutable ou dans le dossier des modèles) ; sans lui, le menu IA
+          utilise les méthodes classiques.
         </p>
         {error && <p role="alert" className="error">{error}</p>}
         {models === null ? (

@@ -12,6 +12,10 @@ export type Dialog =
   | { kind: "palette" }
   | { kind: "recovery" }
   | { kind: "batch" }
+  | { kind: "resize" }
+  | { kind: "exportScales" }
+  | { kind: "scripts" }
+  | { kind: "browser" }
   | { kind: "aiSubject"; remove: boolean }
   | { kind: "confirmClose"; id: number; name: string }
   | null;

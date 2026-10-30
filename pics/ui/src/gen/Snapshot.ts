@@ -19,4 +19,8 @@ export type Snapshot = { docs: Array<DocSummary>, activeId: number | null, view:
 /**
  * Calques du document actif, du plus haut au plus bas.
  */
-layers: Array<LayerDto>, activeLayerId: number | null, blendModes: Array<BlendInfo>, hasSelection: boolean, filters: Array<FilterInfoDto>, adjustmentKinds: Array<BlendInfo>, toolOptions: ToolOptionsDto, paintOptions: PaintOptionsDto, history: HistoryDto, canUndo: boolean, canRedo: boolean, settings: SettingsDto, tool: Tool, };
+layers: Array<LayerDto>, activeLayerId: number | null, blendModes: Array<BlendInfo>, hasSelection: boolean, filters: Array<FilterInfoDto>, adjustmentKinds: Array<BlendInfo>, toolOptions: ToolOptionsDto, paintOptions: PaintOptionsDto, history: HistoryDto, canUndo: boolean, canRedo: boolean, settings: SettingsDto, tool: Tool, 
+/**
+ * Le document affiché est son original (comparaison avant/après) : il est gelé.
+ */
+comparing: boolean, };

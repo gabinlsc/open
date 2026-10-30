@@ -184,3 +184,4 @@ input[aria-invalid="true"] { border-color: var(--danger); }
 .palette-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; border-radius: 10px; cursor: pointer; }
 .palette-list li.active { background: var(--accent, #2447d6); color: #fff; }
 .palette-list kbd { opacity: 0.8; font-size: 0.85em; }
+.code { font-family: ui-monospace, Consolas, monospace; width: 100%; }

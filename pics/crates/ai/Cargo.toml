@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 openpics-core.workspace = true
 openpics-ops.workspace = true
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "ndarray", "load-dynamic"], optional = true }
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"
@@ -17,3 +18,6 @@ thiserror.workspace = true
 
 [lints]
 workspace = true
+
+[features]
+onnx = ["dep:ort"]

@@ -3,6 +3,8 @@ use thiserror::Error;
 /// Erreurs du cœur. Chaque variante porte assez de contexte pour être affichée telle quelle.
 #[derive(Debug, Error, PartialEq)]
 pub enum CoreError {
+    #[error("comparaison avec l'original en cours : relâchez-la avant de modifier le document")]
+    Comparing,
     #[error("dimensions invalides : {width}×{height} (le maximum est {max} pixels par côté)")]
     InvalidSize { width: u32, height: u32, max: u32 },
     #[error("tampon de pixels de {actual} octets, {expected} attendus pour {width}×{height} RGBA")]

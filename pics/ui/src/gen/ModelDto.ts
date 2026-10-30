@@ -3,4 +3,8 @@
 /**
  * Un modèle du catalogue local (voir `openpics-ai`).
  */
-export type ModelDto = { id: string, task: string, name: string, licence: string, source: string, sizeBytes: number, installed: boolean, };
+export type ModelDto = { id: string, task: string, name: string, licence: string, source: string, sizeBytes: number, installed: boolean, 
+/**
+ * Sait isoler un sujet (suppression d'arrière-plan ou sélection du sujet).
+ */
+isolatesSubject: boolean, };

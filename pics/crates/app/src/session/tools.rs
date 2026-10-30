@@ -228,7 +228,7 @@ impl Session {
         self.commit_selection("Inverser la sélection", inverted)
     }
 
-    fn selection_required(&self) -> Result<TileGrid, SessionError> {
+    pub(super) fn selection_required(&self) -> Result<TileGrid, SessionError> {
         self.entry()?.doc.selection.clone().ok_or_else(|| SessionError::InvalidArgument("aucune sélection".into()))
     }
 

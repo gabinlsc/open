@@ -960,3 +960,18 @@ pub fn parse_boolean_op(id: &str) -> Option<openpics_ops::vector::BooleanOp> {
         _ => return None,
     })
 }
+
+/// Un modèle du catalogue local (voir `openpics-ai`).
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ModelDto {
+    pub id: String,
+    pub task: String,
+    pub name: String,
+    pub licence: String,
+    pub source: String,
+    #[ts(type = "number")]
+    pub size_bytes: u64,
+    pub installed: bool,
+}

@@ -176,3 +176,6 @@ input[aria-invalid="true"] { border-color: var(--danger); }
 .slider output { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .curve { display: grid; gap: 6px; }
 .gradient-preview { height: 18px; border-radius: 6px; border: 1px solid var(--line); }
+
+.model-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.model-list li { padding: 12px; border: 1px solid var(--border, currentColor); border-radius: 10px; }

@@ -2685,9 +2685,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 
 [[package]]
+name = "openpics-ai"
+version = "0.1.0"
+dependencies = [
+ "openpics-core",
+ "openpics-ops",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "openpics-app"
 version = "0.1.0"
 dependencies = [
+ "openpics-ai",
  "openpics-core",
  "openpics-gpu",
  "openpics-io",

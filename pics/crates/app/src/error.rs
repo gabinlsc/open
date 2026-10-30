@@ -16,6 +16,8 @@ pub enum SessionError {
     Io(#[from] openpics_io::IoError),
     #[error(transparent)]
     Core(#[from] openpics_core::CoreError),
+    #[error(transparent)]
+    Ai(#[from] openpics_ai::AiError),
 }
 
 impl SessionError {
@@ -28,6 +30,7 @@ impl SessionError {
             SessionError::Io(_) => "io",
             SessionError::Core(openpics_core::CoreError::ShortcutConflict { .. }) => "shortcut_conflict",
             SessionError::Core(_) => "core",
+            SessionError::Ai(_) => "ai",
         }
     }
 }

@@ -67,6 +67,10 @@ export function MenuBar() {
         { action: "select.shrink" },
       ],
     },
+    {
+      label: "IA",
+      items: [{ action: "ai.subject" }, { action: "ai.remove_background" }, { action: "ai.inpaint" }, { sep: true }, { action: "ai.models" }],
+    },
     { label: "Filtre", items: filterItems },
     { label: "Image", items: [{ action: "image.flip_h" }, { action: "image.flip_v" }, { action: "image.invert" }] },
     {

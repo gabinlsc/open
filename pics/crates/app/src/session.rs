@@ -40,6 +40,7 @@ struct DocEntry {
     active_layer: Option<LayerId>,
 }
 
+mod ai;
 mod filters;
 mod paint;
 mod tools;

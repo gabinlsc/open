@@ -5,6 +5,7 @@ import { parseNumber } from "../styles";
 import { ACTIONS } from "../actions";
 import { chordFromEvent, prettyChord } from "../keys";
 import { activeDoc, errorText, useStore } from "../store";
+import { AiModelsDialog, AiSubjectDialog } from "./AiDialogs";
 import { Modal } from "./Modal";
 
 const MAX_SIZE = 30000;
@@ -284,6 +285,10 @@ export function Dialogs() {
       return <ExportDialog />;
     case "shortcuts":
       return <ShortcutsDialog />;
+    case "aiModels":
+      return <AiModelsDialog />;
+    case "aiSubject":
+      return <AiSubjectDialog remove={dialog.remove} />;
     case "transform":
       return <TransformDialog />;
     case "selectOp":

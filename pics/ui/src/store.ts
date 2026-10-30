@@ -7,6 +7,8 @@ export type Dialog =
   | { kind: "transform" }
   | { kind: "selectOp"; op: "feather" | "grow" | "shrink" }
   | { kind: "shortcuts" }
+  | { kind: "aiModels" }
+  | { kind: "aiSubject"; remove: boolean }
   | { kind: "confirmClose"; id: number; name: string }
   | null;
 

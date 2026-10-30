@@ -459,3 +459,58 @@ pub fn keymap_reset(shared: State<'_, Shared>) -> ApiResult<KeymapDto> {
     shared.save_prefs();
     Ok(dto)
 }
+
+#[tauri::command]
+pub async fn ai_select_subject(shared: State<'_, Shared>, tolerance: f32) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.ai_select_subject(tolerance))
+}
+
+#[tauri::command]
+pub async fn ai_remove_background(shared: State<'_, Shared>, tolerance: f32) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.ai_remove_background(tolerance))
+}
+
+#[tauri::command]
+pub async fn ai_inpaint(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
+    mutate(&shared, Session::ai_inpaint)
+}
+
+fn model_list(shared: &Shared) -> Result<Vec<crate::dto::ModelDto>, SessionError> {
+    let store = openpics_ai::ModelStore::new(&shared.models_dir);
+    Ok(store
+        .catalog()?
+        .into_iter()
+        .map(|m| crate::dto::ModelDto {
+            installed: store.is_installed(&m.id),
+            task: m.task.label().to_string(),
+            id: m.id,
+            name: m.name,
+            licence: m.licence,
+            source: m.source,
+            size_bytes: m.size_bytes,
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub fn ai_models(shared: State<'_, Shared>) -> ApiResult<Vec<crate::dto::ModelDto>> {
+    Ok(model_list(&shared)?)
+}
+
+#[tauri::command]
+pub async fn ai_model_import(
+    shared: State<'_, Shared>,
+    id: String,
+    path: String,
+) -> ApiResult<Vec<crate::dto::ModelDto>> {
+    openpics_ai::ModelStore::new(&shared.models_dir)
+        .import(&id, std::path::Path::new(&path))
+        .map_err(SessionError::from)?;
+    Ok(model_list(&shared)?)
+}
+
+#[tauri::command]
+pub fn ai_model_remove(shared: State<'_, Shared>, id: String) -> ApiResult<Vec<crate::dto::ModelDto>> {
+    openpics_ai::ModelStore::new(&shared.models_dir).remove(&id).map_err(SessionError::from)?;
+    Ok(model_list(&shared)?)
+}

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { initLang, setLang as persistLang, type Lang } from "./i18n";
 import { api, CommandError, type CursorEvent, type KeymapDto, type SettingsDto, type Snapshot, type ThemeChoice } from "./api";
 
 export type Dialog =
@@ -8,6 +9,9 @@ export type Dialog =
   | { kind: "selectOp"; op: "feather" | "grow" | "shrink" }
   | { kind: "shortcuts" }
   | { kind: "aiModels" }
+  | { kind: "palette" }
+  | { kind: "recovery" }
+  | { kind: "batch" }
   | { kind: "aiSubject"; remove: boolean }
   | { kind: "confirmClose"; id: number; name: string }
   | null;
@@ -22,6 +26,7 @@ interface UiState {
   snapshot: Snapshot | null;
   keymap: KeymapDto["bindings"];
   themeChoice: ThemeChoice;
+  lang: Lang;
   gpuError: string | null;
   cursor: CursorEvent | null;
   dialog: Dialog;
@@ -46,6 +51,7 @@ interface UiState {
   setSetting<K extends keyof SettingsDto>(key: K, value: SettingsDto[K]): Promise<void>;
   setKeymap(bindings: KeymapDto["bindings"]): void;
   setThemeChoice(choice: ThemeChoice): void;
+  setLang(lang: Lang): void;
   setGpuError(message: string | null): void;
 }
 
@@ -58,6 +64,7 @@ export const useStore = create<UiState>()((set, get) => ({
   snapshot: null,
   keymap: {},
   themeChoice: "system",
+  lang: initLang(),
   gpuError: null,
   cursor: null,
   dialog: null,
@@ -79,6 +86,8 @@ export const useStore = create<UiState>()((set, get) => ({
         version: status.version,
         portable: status.portable,
       });
+      // Des copies de récupération au démarrage = la session précédente s'est mal terminée.
+      if ((await api.recoveryList().catch(() => [])).length > 0) set({ dialog: { kind: "recovery" } });
     } catch (e) {
       set({ ready: true, notice: { kind: "error", text: `Démarrage impossible : ${errorText(e)}` } });
     }
@@ -128,6 +137,10 @@ export const useStore = create<UiState>()((set, get) => ({
     set({ keymap });
   },
 
+  setLang(lang) {
+    persistLang(lang);
+    set({ lang });
+  },
   setThemeChoice(themeChoice) {
     set({ themeChoice });
   },

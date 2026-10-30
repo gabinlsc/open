@@ -35,6 +35,15 @@ pub fn open(path: &Path, id: DocId) -> Result<Document, IoError> {
     Ok(doc)
 }
 
+/// Ouvre une copie de récupération : contrairement à `open`, elle n'est liée à aucun fichier (le chemin est le
+/// dossier de récupération, pas un choix de l'utilisateur) et garde le nom du document enregistré dans l'archive.
+pub fn open_recovered(path: &Path, id: DocId) -> Result<Document, IoError> {
+    let mut doc = ocv::read(path, id)?;
+    doc.path = None;
+    doc.mark_unsaved();
+    Ok(doc)
+}
+
 /// Enregistre au format natif `.ocv` (seul format qui conserve calques et repères).
 pub fn save(doc: &mut Document, path: &Path) -> Result<(), IoError> {
     ocv::write(doc, path)?;
@@ -44,6 +53,12 @@ pub fn save(doc: &mut Document, path: &Path) -> Result<(), IoError> {
     }
     doc.mark_saved();
     Ok(())
+}
+
+/// Écrit une copie `.ocv` sans toucher au document (ni chemin, ni état « enregistré ») : sert à l'enregistrement
+/// automatique de récupération.
+pub fn write_copy(doc: &Document, path: &Path) -> Result<(), IoError> {
+    ocv::write(doc, path)
 }
 
 /// Exporte une image aplatie dans le format déduit de l'extension. N'altère pas le document.

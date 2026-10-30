@@ -1,3 +1,4 @@
+import { t as tr } from "../i18n";
 import { api, type Tool } from "../api";
 import { prettyChord } from "../keys";
 import { useStore } from "../store";
@@ -36,6 +37,7 @@ const TOOLS: { id: Tool; label: string; action: string; icon: JSX.Element }[] = 
 ];
 
 export function Toolbar() {
+  useStore((s) => s.lang); // re-rendu au changement de langue
   const tool = useStore((s) => s.snapshot?.tool);
   const keymap = useStore((s) => s.keymap);
   const run = useStore((s) => s.run);
@@ -48,8 +50,8 @@ export function Toolbar() {
             key={t.id}
             className={tool === t.id ? "tool active" : "tool"}
             aria-pressed={tool === t.id}
-            aria-label={t.label}
-            title={chord ? `${t.label} (${prettyChord(chord)})` : t.label}
+            aria-label={tr(t.label)}
+            title={chord ? `${tr(t.label)} (${prettyChord(chord)})` : tr(t.label)}
             onClick={() => void run(() => api.setTool(t.id))}
           >
             {t.icon}

@@ -514,3 +514,39 @@ pub fn ai_model_remove(shared: State<'_, Shared>, id: String) -> ApiResult<Vec<c
     openpics_ai::ModelStore::new(&shared.models_dir).remove(&id).map_err(SessionError::from)?;
     Ok(model_list(&shared)?)
 }
+
+#[tauri::command]
+pub fn recovery_list(shared: State<'_, Shared>) -> Vec<crate::recovery::RecoveryDto> {
+    crate::recovery::list(&shared.recovery_dir)
+}
+
+#[tauri::command]
+pub fn recovery_restore(shared: State<'_, Shared>, file: String) -> ApiResult<Snapshot> {
+    let dir = shared.recovery_dir.clone();
+    mutate(&shared, |s| s.recovery_restore(&dir, &file).map(|_| ()))
+}
+
+#[tauri::command]
+pub fn recovery_discard(shared: State<'_, Shared>, file: String) -> Vec<crate::recovery::RecoveryDto> {
+    crate::recovery::discard(&shared.recovery_dir, &file);
+    crate::recovery::list(&shared.recovery_dir)
+}
+
+#[tauri::command]
+pub async fn batch_run(
+    input_dir: String,
+    output_dir: String,
+    filter: String,
+    values: Vec<f32>,
+    extension: String,
+    jpeg_quality: u8,
+) -> ApiResult<crate::batch::BatchReport> {
+    // Calcul long : hors du fil de l'interface, et sans tenir le verrou de session.
+    let report = tauri::async_runtime::spawn_blocking(move || {
+        let files = crate::batch::list_images(std::path::Path::new(&input_dir))?;
+        crate::batch::run_filter(&files, std::path::Path::new(&output_dir), &filter, &values, &extension, jpeg_quality)
+    })
+    .await
+    .map_err(|e| SessionError::InvalidArgument(e.to_string()))??;
+    Ok(report)
+}

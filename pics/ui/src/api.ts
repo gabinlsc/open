@@ -23,13 +23,15 @@ import type { StyleDto } from "./gen/StyleDto";
 import type { Snapshot } from "./gen/Snapshot";
 import type { ThemeChoice } from "./gen/ThemeChoice";
 import type { TransformDto } from "./gen/TransformDto";
+import type { BatchReport } from "./gen/BatchReport";
+import type { RecoveryDto } from "./gen/RecoveryDto";
 import type { ModelDto } from "./gen/ModelDto";
 import type { ShapeDto } from "./gen/ShapeDto";
 import type { TextDto } from "./gen/TextDto";
 import type { Tool } from "./gen/Tool";
 import type { ToolOptionsDto } from "./gen/ToolOptionsDto";
 
-export type { ModelDto, ShapeDto, TextDto, FilterInfoDto, AdjustmentDto, AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, PaintOptionsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
+export type { BatchReport, RecoveryDto, ModelDto, ShapeDto, TextDto, FilterInfoDto, AdjustmentDto, AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, PaintOptionsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
 
 /** Erreur typée côté TS : `code` est stable, `message` est affichable tel quel. */
 export class CommandError extends Error {
@@ -109,6 +111,11 @@ export const api = {
   aiModels: () => call<ModelDto[]>("ai_models"),
   aiModelImport: (id: string, path: string) => call<ModelDto[]>("ai_model_import", { id, path }),
   aiModelRemove: (id: string) => call<ModelDto[]>("ai_model_remove", { id }),
+  recoveryList: () => call<RecoveryDto[]>("recovery_list"),
+  recoveryRestore: (file: string) => call<Snapshot>("recovery_restore", { file }),
+  recoveryDiscard: (file: string) => call<RecoveryDto[]>("recovery_discard", { file }),
+  batchRun: (inputDir: string, outputDir: string, filter: string, values: number[], extension: string, jpegQuality: number) =>
+    call<BatchReport>("batch_run", { inputDir, outputDir, filter, values, extension, jpegQuality }),
   maskAdd: (id: number, reveal: boolean) => call<Snapshot>("mask_add", { id, reveal }),
   maskRemove: (id: number) => call<Snapshot>("mask_remove", { id }),
   maskSetEnabled: (id: number, enabled: boolean) => call<Snapshot>("mask_set_enabled", { id, enabled }),

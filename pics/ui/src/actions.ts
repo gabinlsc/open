@@ -126,6 +126,8 @@ export const ACTIONS: Record<string, ActionDef> = {
   "ai.remove_background": { label: "Supprimer l'arrière-plan…", run: () => st().setDialog({ kind: "aiSubject", remove: true }), enabled: hasDoc },
   "ai.inpaint": { label: "Combler la sélection", run: () => void st().run(api.aiInpaint), enabled: hasDoc },
   "ai.models": { label: "Modèles d'IA…", run: () => st().setDialog({ kind: "aiModels" }) },
+  "app.palette": { label: "Palette de commandes…", run: () => st().setDialog({ kind: "palette" }) },
+  "file.batch": { label: "Traitement par lot…", run: () => st().setDialog({ kind: "batch" }) },
   "edit.shortcuts": { label: "Raccourcis clavier…", run: () => st().setDialog({ kind: "shortcuts" }) },
   "image.flip_h": { label: "Retourner horizontalement", run: imageOp("flipHorizontal"), enabled: hasDoc },
   "image.flip_v": { label: "Retourner verticalement", run: imageOp("flipVertical"), enabled: hasDoc },

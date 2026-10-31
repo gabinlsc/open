@@ -1,53 +1,26 @@
 # OpenPics
 
-Éditeur d'images raster libre et local pour Windows 10/11. Licence **GPL-3.0-only** (voir `../LICENSE`).
-Aucun compte, aucune télémétrie : l'application ne fait aucune requête réseau.
+Éditeur d'images libre (GPL-3.0-only), 100 % local : pas de compte, pas de télémétrie. Windows 10/11 x64.
 
-- Architecture : [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- État de la phase en cours : [`docs/PHASE1.md`](docs/PHASE1.md)
+## Ce qu'il fait
+- **Documents** : calques (raster, groupes, réglage, texte, formes), masques, 27 modes de fusion, styles, historique illimité, onglets, repères, règles, grille, aimantation, récupération après plantage.
+- **Sélections et peinture** : rectangle, ellipse, lasso, baguette magique, pinceau, gomme, dégradé, pot de peinture, tampon, correcteurs, pièce, doigt, éponge, fluidité.
+- **Réglages** (non destructifs) : 15 types dont courbes, niveaux, LUT 3D `.cube`, correspondance de couleurs. **Filtres** : 21, avec aperçu en direct.
+- **Texte et vectoriel** : texte éditable (paragraphe, sur tracé), formes, plume, opérations booléennes, SVG (import raster, export vectoriel).
+- **IA locale** : sélection du sujet et suppression d'arrière-plan par modèle ONNX (à fournir) ou méthode classique ; comblement par diffusion.
+- **Productivité** : palette Ctrl+K, scripts (Rhai) et enregistreur d'actions, traitement par lot, taille d'image (Lanczos), export multi-échelles, comparaison avec l'original, explorateur de dossier, interface FR/EN (menus et outils).
+- **Formats** : PNG, JPEG, WebP, TIFF, BMP, GIF, et `.ocv` natif (calques, masques, texte et formes éditables).
 
-## Prérequis
+## Limites connues (honnêtes)
+Voir `docs/PHASE9.md`. En bref : pas de plans de travail multiples, pas d'édition de nœuds sur un tracé existant, pas de modèles génératifs (remplissage, super-résolution, colorisation), dialogues non traduits en anglais, ONNX Runtime à fournir soi-même, application jamais exécutée sur un Windows réel pendant le développement (compilée et éditée de liens seulement).
 
-- Rust stable (voir `rust-toolchain.toml`) et Node.js 22
-- Windows : WebView2 (inclus dans Windows 11, installé avec Windows 10 récent)
-- Linux/macOS : seuls les crates `core`, `ops`, `io`, `gpu` et la logique de l'application se construisent ; la coque Tauri et le canvas natif sont propres à Windows
-
-## Commandes
-
+## Construire
 ```bash
-# Tests de tout ce qui ne dépend pas de la coque (toutes plateformes)
+# Cœur, opérations, E/S, rendu, IA (Linux/macOS/Windows)
 cargo test --workspace --exclude openpics-app
+# Logique d'application sans la coque Tauri
 cargo test -p openpics-app --no-default-features
-
-# Lint et format
-cargo fmt --all --check
-cargo clippy --workspace --exclude openpics-app --all-targets -- -D warnings
-
-# Benchmarks (criterion)
-cargo bench -p openpics-core -p openpics-ops -p openpics-io
-
-# Audit des licences (cargo install --locked cargo-deny)
-cargo deny check licenses bans sources
-
-# Interface seule
-cd ui && npm ci && npm run typecheck && npm test && npm run build
+# Application (Windows, WebView2) : voir docs/RELEASE.md
+cd ui && npm ci && npm run build && cd ../crates/app && ../../ui/node_modules/.bin/tauri build
 ```
-
-Sous Windows, application complète :
-
-```bash
-cd ui && npm ci
-cd ../crates/app
-../../ui/node_modules/.bin/tauri dev      # développement
-../../ui/node_modules/.bin/tauri build    # installeurs NSIS et MSI dans target/release/bundle/
-```
-
-Les tests de rendu GPU utilisent la carte graphique de la machine ; sans adaptateur ils s'ignorent avec un message, sauf si `OPENPICS_REQUIRE_GPU=1` est défini (c'est le cas en CI, avec un rasteriseur Vulkan logiciel).
-
-## Version portable
-
-Un fichier vide nommé `portable` placé à côté de `OpenPics.exe` range les préférences dans `data\` à côté de l'exécutable ; rien n'est écrit ailleurs.
-
-## Types partagés avec l'interface
-
-Les types TypeScript de `ui/src/gen/` sont générés depuis Rust (ts-rs) par `cargo test -p openpics-app --no-default-features` ; ne les modifiez pas à la main (la CI vérifie qu'ils sont à jour).
+Documentation : `docs/ARCHITECTURE.md`, une page par phase (`docs/PHASE*.md`), `docs/MODELS.md` (modèles ONNX), `docs/RELEASE.md` (publication), `tools/README.md` (captures et vidéo).

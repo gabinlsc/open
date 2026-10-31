@@ -25,9 +25,12 @@ function score(query: string, text: string): number | null {
 
 export function rank(query: string, items: PaletteItem[], limit = 50): PaletteItem[] {
   const q = fold(query.trim());
-  return items
-    .map((item) => ({ item, s: score(q, fold(item.label)) }))
-    .filter((x): x is { item: PaletteItem; s: number } => x.s !== null)
+  const scored = items.map((item) => ({ item, s: score(q, fold(item.label)) }));
+  // Une recherche approximative (lettres dans l'ordre) ne sert que si rien ne contient la saisie telle quelle :
+  // sinon « sel » remonterait « Stylisation › Relief ».
+  const exact = scored.some((x) => x.s !== null && x.s < 10);
+  return scored
+    .filter((x): x is { item: PaletteItem; s: number } => x.s !== null && (!exact || x.s < 10))
     .sort((a, b) => a.s - b.s || a.item.label.localeCompare(b.item.label))
     .slice(0, limit)
     .map((x) => x.item);

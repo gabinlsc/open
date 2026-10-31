@@ -5,3 +5,5 @@ ui/dist/
 crates/app/gen/
 *.tmp
 *.openpics-tmp
+tools/showcase/out/
+tools/promo/assets/

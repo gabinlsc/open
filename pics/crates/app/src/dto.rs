@@ -354,11 +354,26 @@ pub fn parse_blend(id: &str) -> Option<BlendMode> {
     serde_json::from_value(serde_json::Value::String(id.to_owned())).ok()
 }
 
+/// Un calque de texte qui porte encore son nom d'origine s'affiche avec le début de son contenu.
+fn display_name(l: &Layer) -> String {
+    match l.text() {
+        Some(t) if l.name == "Texte" && !t.text.trim().is_empty() => {
+            let first_line = t.text.lines().next().unwrap_or_default().trim();
+            let mut name: String = first_line.chars().take(28).collect();
+            if first_line.chars().count() > 28 {
+                name.push('…');
+            }
+            name
+        }
+        _ => l.name.clone(),
+    }
+}
+
 impl From<&Layer> for LayerDto {
     fn from(l: &Layer) -> Self {
         Self {
             id: l.id.0,
-            name: l.name.clone(),
+            name: display_name(l),
             visible: l.visible,
             opacity: l.opacity,
             fill: l.fill,
@@ -425,6 +440,18 @@ impl LayerPropsDto {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn text_layers_are_named_after_their_content_until_renamed() {
+        let mut l = Layer::new(openpics_core::LayerId(1), "Texte", openpics_core::TileGrid::new(4, 4).unwrap());
+        l.kind = openpics_core::LayerKind::Text(Box::new(openpics_core::text::TextModel {
+            text: "Bonjour le monde\nsecond".into(),
+            ..Default::default()
+        }));
+        assert_eq!(LayerDto::from(&l).name, "Bonjour le monde");
+        l.name = "Titre".into();
+        assert_eq!(LayerDto::from(&l).name, "Titre", "un nom choisi par l'utilisateur est respecté");
+    }
 
     #[test]
     fn style_dtos_roundtrip_and_reject_invalid_colours() {

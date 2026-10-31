@@ -1,0 +1,18 @@
+[package]
+name = "openpics-showcase"
+description = "Outil de démonstration : génère, avec le vrai moteur, les scènes (état + rendu du canvas) utilisées pour les captures et la vidéo."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+openpics-app = { path = "../../crates/app", default-features = false }
+openpics-core.workspace = true
+openpics-gpu.workspace = true
+image = { version = "0.25", default-features = false, features = ["png"] }
+serde_json.workspace = true
+
+[lints]
+workspace = true

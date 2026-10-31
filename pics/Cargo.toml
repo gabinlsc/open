@@ -1,8 +1,8 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/ops", "crates/io", "crates/gpu", "crates/ai", "crates/app"]
+members = ["tools/showcase", "crates/core", "crates/ops", "crates/io", "crates/gpu", "crates/ai", "crates/app"]
 # L'app Tauri exige WebView2 (Windows) : les autres crates se construisent et se testent partout.
-default-members = ["crates/core", "crates/ops", "crates/io", "crates/gpu", "crates/ai"]
+default-members = ["tools/showcase", "crates/core", "crates/ops", "crates/io", "crates/gpu", "crates/ai"]
 
 [workspace.package]
 version = "0.1.0"

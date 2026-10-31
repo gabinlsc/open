@@ -2881,6 +2881,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "openpics-showcase"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "openpics-app",
+ "openpics-core",
+ "openpics-gpu",
+ "serde_json",
+]
+
+[[package]]
 name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

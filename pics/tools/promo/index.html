@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>OpenPics — vidéo promotionnelle</title>
+<style>
+@font-face{font-family:Inter;font-weight:400;src:url(assets/fonts/inter-400.woff2) format("woff2")}
+@font-face{font-family:Inter;font-weight:500;src:url(assets/fonts/inter-500.woff2) format("woff2")}
+@font-face{font-family:Inter;font-weight:600;src:url(assets/fonts/inter-600.woff2) format("woff2")}
+@font-face{font-family:"Inter Display";font-weight:700;src:url(assets/fonts/inter-display-700.woff2) format("woff2")}
+:root{--blue:#2447D6;--blue-deep:#1B37B0;--blue-pale:#E9EEFE;--ink:#0B1220;--grey:#566074;--line:#E1E5ED;--bg:#F6F7F9;--night:#0A0F1C;--night2:#121A2E;--r1:10px;--r2:16px;--r3:24px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+#stage{position:relative;width:1920px;height:1080px;overflow:hidden}
+.scene{position:absolute;inset:0;overflow:hidden;display:none}
+.abs{position:absolute;left:0;top:0;will-change:transform,opacity}
+.disp{font-family:"Inter Display",Inter,sans-serif;font-weight:700;letter-spacing:-.02em;line-height:1.04}
+.night{background:var(--night);color:#fff}.light{background:var(--bg);color:var(--ink)}.blue{background:var(--blue);color:#fff}
+.glow{position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none}
+.card{background:#fff;border-radius:var(--r3);box-shadow:0 2px 6px rgba(11,18,32,.06),0 30px 80px rgba(11,18,32,.22);overflow:hidden}
+.card img{display:block;width:100%;height:100%;object-fit:cover}
+.pill{display:inline-block;background:var(--blue-pale);color:var(--blue);font-weight:600;font-size:26px;padding:8px 22px;border-radius:999px}
+.pill.on-blue{background:rgba(255,255,255,.16);color:#fff}
+.pill.on-night{background:#16224A;color:#B7C5FA}
+.chip{display:inline-flex;align-items:center;gap:12px;background:#fff;color:var(--ink);font-weight:600;font-size:28px;padding:14px 24px;border-radius:var(--r2);box-shadow:0 10px 30px rgba(11,18,32,.18)}
+.dot{width:14px;height:14px;border-radius:50%;background:var(--blue)}
+.mask{overflow:hidden;display:block}
+.lh{font-size:84px;line-height:1.08}
+.sub{font-size:36px;line-height:1.45;color:var(--grey);font-weight:400}
+.night .sub{color:#A3ADC2}.blue .sub{color:#DBE4FF}
+.row{display:flex;align-items:center;gap:16px;padding:14px 18px;border-radius:12px;font-size:24px;font-weight:500;color:var(--ink)}
+.feat{background:#fff;border:1px solid var(--line);border-radius:var(--r2);padding:46px 44px;box-shadow:0 1px 2px rgba(11,18,32,.05),0 8px 24px rgba(11,18,32,.06)}
+.feat .ic{width:88px;height:88px;border-radius:22px;background:var(--blue-pale);display:grid;place-items:center;margin-bottom:30px}.feat .ic svg{width:46px;height:46px}
+.feat h3{font:700 44px/1.15 "Inter Display",Inter;color:var(--ink);margin-bottom:8px;letter-spacing:-.01em}
+.feat p{font-size:30px;line-height:1.4;color:var(--grey)}
+</style>
+</head>
+<body>
+<div id="stage">
+
+<!-- 1 · Intro -->
+<section class="scene night" id="s1">
+  <div class="glow abs" id="s1glow" style="width:900px;height:900px;background:#2447D6;opacity:.0"></div>
+  <div id="s1grid" class="abs" style="inset:0;width:1920px;height:1080px;opacity:.07;background-image:linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px);background-size:96px 96px"></div>
+  <div class="abs" id="s1icon" style="width:240px;height:240px">
+    <svg viewBox="0 0 64 64" width="240" height="240">
+      <rect id="i-bg" width="64" height="64" rx="16" fill="#2447D6"/>
+      <rect id="i-frame" x="15" y="17" width="34" height="30" rx="5" fill="none" stroke="#fff" stroke-width="3.6" stroke-dasharray="130" stroke-dashoffset="130"/>
+      <circle id="i-sun" cx="26" cy="27" r="3.4" fill="#fff"/>
+      <path id="i-hill" d="M17.5 43.5l9.5-9 6.5 6 5-4.5 8 7.5z" fill="#fff" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <div class="abs disp" id="s1word" style="font-size:150px;color:#fff;white-space:nowrap"></div>
+  <div class="abs" id="s1by" style="font-size:40px;font-weight:500;color:#A3ADC2;letter-spacing:.02em">by glsc</div>
+</section>
+
+<!-- 2 · Message -->
+<section class="scene light" id="s2">
+  <div class="abs" id="s2lines" style="left:170px;top:210px">
+    <span class="mask"><span class="disp abs" style="position:relative;display:block;font-size:176px">Retouchez.</span></span>
+    <span class="mask"><span class="disp abs" style="position:relative;display:block;font-size:176px">Détourez.</span></span>
+    <span class="mask"><span class="disp abs" style="position:relative;display:block;font-size:176px">Composez<span style="color:var(--blue)">.</span></span></span>
+  </div>
+  <div class="abs sub" id="s2sub" style="left:176px;top:800px;width:900px;font-size:44px;color:var(--grey)">Un éditeur d'images complet.<br><span style="color:var(--ink);font-weight:600">Qui reste sur votre ordinateur.</span></div>
+  <div class="abs card" id="s2card" style="width:560px;height:373px;left:1270px;top:250px"><img src="assets/art/orange-original.png"></div>
+  <div class="abs card" id="s2card2" style="width:420px;height:262px;left:1190px;top:600px"><img src="assets/art/affiche-4.png"></div>
+</section>
+
+<!-- 3 · L'éditeur -->
+<section class="scene night" id="s3">
+  <div class="glow abs" style="width:1100px;height:700px;left:410px;top:560px;background:#2447D6;opacity:.35"></div>
+  <div class="abs disp" id="s3title" style="left:220px;top:52px;font-size:62px;color:#fff;white-space:nowrap">Un vrai éditeur. <span style="color:#8EA4F7">Pas un jouet.</span></div>
+  <div class="abs card" id="s3win" style="width:1480px;height:832px;left:220px;top:170px;border-radius:24px;transform-origin:88% 40%"><img src="assets/ui/editeur-sombre.png"></div>
+  <div class="abs" id="s3chip" style="left:640px;top:560px"><span class="chip"><span class="dot"></span>Calques · masques · réglages</span></div>
+</section>
+
+<!-- 4 · Retouche non destructive -->
+<section class="scene light" id="s4">
+  <div class="abs" style="left:150px;top:230px;width:760px">
+    <div id="s4pill"><span class="pill">Non destructif</span></div>
+    <div class="disp lh" id="s4h" style="margin-top:28px;font-size:88px">Retouchez sans jamais abîmer l'original.</div>
+    <div class="sub" id="s4p" style="margin-top:30px">Calques de réglage, masques, 27 modes de fusion. Chaque étape reste annulable.</div>
+  </div>
+  <div class="abs card" id="s4card" style="left:1000px;top:210px;width:800px;height:534px">
+    <img src="assets/art/orange-retouche.png" style="position:absolute;inset:0">
+    <div id="s4before" style="position:absolute;inset:0;overflow:hidden"><img src="assets/art/orange-original.png" style="position:absolute;left:0;top:0;width:800px;height:534px"></div>
+    <div id="s4bar" style="position:absolute;top:0;bottom:0;width:6px;margin-left:-3px;background:#fff;box-shadow:0 0 0 2px rgba(36,71,214,.9)"></div>
+    <div id="s4knob" style="position:absolute;top:50%;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;background:var(--blue);display:grid;place-items:center;box-shadow:0 8px 24px rgba(11,18,32,.3)"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6-6 6 6 6M15 6l6 6-6 6"/></svg></div>
+    <span class="pill" id="s4lb1" style="position:absolute;left:24px;top:24px;background:#fff;color:var(--ink)">Avant</span>
+    <span class="pill" id="s4lb2" style="position:absolute;right:24px;top:24px;background:var(--blue);color:#fff">Après</span>
+  </div>
+  <div class="abs card" id="s4panel" style="left:1360px;top:660px;width:430px;border-radius:var(--r2);padding:12px">
+    <div class="row" id="s4r1"><span class="dot"></span>Luminosité / Contraste</div>
+    <div class="row" id="s4r2" style="background:var(--blue-pale)"><span class="dot"></span>Teinte / Saturation</div>
+    <div class="row" id="s4r3"><span class="dot"></span>Vibrance</div>
+  </div>
+</section>
+
+<!-- 5 · Arrière-plan -->
+<section class="scene blue" id="s5">
+  <div class="glow abs" style="width:900px;height:900px;left:-200px;top:-300px;background:#5A74E6;opacity:.6"></div>
+  <div class="abs" style="left:150px;top:260px;width:760px">
+    <div id="s5pill"><span class="pill on-blue">IA locale</span></div>
+    <div class="disp lh" id="s5h" style="margin-top:28px;font-size:104px">Détourez en un clic.</div>
+    <div class="sub" id="s5p" style="margin-top:30px">Le sujet est isolé sur votre machine. Aucune image n'est envoyée nulle part.</div>
+  </div>
+  <div class="abs card" id="s5card" style="left:1000px;top:200px;width:800px;height:534px">
+    <img src="assets/art/orange-selection.png" style="position:absolute;inset:0">
+    <div id="s5after" style="position:absolute;inset:0"><img src="assets/art/orange-sans-fond.png" style="position:absolute;inset:0"></div>
+  </div>
+  <div class="abs" id="s5chip" style="left:1000px;top:770px"><span class="chip"><span class="dot"></span><span id="s5chiptxt">Sélection du sujet</span></span></div>
+</section>
+
+<!-- 6 · Texte et vectoriel -->
+<section class="scene light" id="s6">
+  <div class="abs" style="left:150px;top:250px;width:760px">
+    <div id="s6pill"><span class="pill">Texte et vectoriel</span></div>
+    <div class="disp lh" id="s6h" style="margin-top:28px;font-size:96px">Composez vos visuels.</div>
+    <div class="sub" id="s6p" style="margin-top:30px">Formes, tracés à la plume, opérations booléennes, texte éditable. Export SVG.</div>
+  </div>
+  <div class="abs card" id="s6card" style="left:1000px;top:210px;width:800px;height:500px">
+    <img id="s6i0" src="assets/art/affiche-0.png" style="position:absolute;inset:0">
+    <img id="s6i1" src="assets/art/affiche-1.png" style="position:absolute;inset:0">
+    <img id="s6i2" src="assets/art/affiche-2.png" style="position:absolute;inset:0">
+    <img id="s6i3" src="assets/art/affiche-3.png" style="position:absolute;inset:0">
+    <img id="s6i4" src="assets/art/affiche-4.png" style="position:absolute;inset:0">
+  </div>
+  <div class="abs" id="s6chip" style="left:1000px;top:760px"><span class="chip"><span class="dot"></span><span id="s6chiptxt">Formes</span></span></div>
+</section>
+
+<!-- 7 · Filtres -->
+<section class="scene night" id="s7">
+  <div class="glow abs" style="width:900px;height:900px;left:1000px;top:300px;background:#2447D6;opacity:.35"></div>
+  <div class="abs" style="left:150px;top:250px;width:760px">
+    <div id="s7pill"><span class="pill on-night">Filtres</span></div>
+    <div class="disp lh" id="s7h" style="margin-top:28px;font-size:104px">21 filtres, en direct.</div>
+    <div class="sub" id="s7p" style="margin-top:30px">L'aperçu se met à jour pendant que vous réglez. Annulable d'un geste.</div>
+  </div>
+  <div class="abs card" id="s7card" style="left:1000px;top:200px;width:800px;height:534px">
+    <img id="s7i0" src="assets/art/cristal-0.png" style="position:absolute;inset:0"><img id="s7i1" src="assets/art/cristal-1.png" style="position:absolute;inset:0"><img id="s7i2" src="assets/art/cristal-2.png" style="position:absolute;inset:0"><img id="s7i3" src="assets/art/cristal-3.png" style="position:absolute;inset:0"><img id="s7i4" src="assets/art/cristal-4.png" style="position:absolute;inset:0"><img id="s7i5" src="assets/art/cristal-5.png" style="position:absolute;inset:0">
+  </div>
+  <div class="abs card" id="s7ui" style="left:1000px;top:770px;width:800px;height:120px;border-radius:var(--r2);padding:22px 30px;background:#121A2E">
+    <div style="display:flex;justify-content:space-between;color:#fff;font-size:26px;font-weight:600"><span>Pixellisation › Cristallisation</span><span id="s7val" style="color:#8EA4F7">3</span></div>
+    <div style="position:relative;height:8px;border-radius:4px;background:#222C45;margin-top:26px"><div id="s7fill" style="position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--blue)"></div><div id="s7kn" style="position:absolute;top:-10px;width:28px;height:28px;margin-left:-14px;border-radius:50%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.4)"></div></div>
+  </div>
+</section>
+
+<!-- 8 · Fonctionnalités -->
+<section class="scene light" id="s8">
+  <div class="abs disp" id="s8h" style="left:0;width:1920px;text-align:center;top:92px;font-size:92px">Et tout le reste.</div>
+  <div id="s8grid" class="abs" style="left:130px;top:270px;width:1660px;display:grid;grid-template-columns:repeat(3,1fr);gap:32px">
+    <div class="feat"><div class="ic"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#2447D6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></div><h3>Palette de commandes</h3><p>Ctrl+K : toute action, tout filtre.</p></div>
+    <div class="feat"><div class="ic"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#2447D6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg></div><h3>Scripts et actions</h3><p>Enregistrez, rejouez. Sans accès aux fichiers.</p></div>
+    <div class="feat"><div class="ic"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#2447D6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div><h3>Traitement par lot</h3><p>Un filtre sur tout un dossier.</p></div>
+    <div class="feat"><div class="ic"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#2447D6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 20h16"/></svg></div><h3>Export @1x @2x</h3><p>Toutes vos résolutions, d'un coup.</p></div>
+    <div class="feat"><div class="ic"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#2447D6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg></div><h3>Récupération</h3><p>Copie automatique après un plantage.</p></div>
+    <div class="feat"><div class="ic"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#2447D6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></div><h3>Français & English</h3><p>Interface bilingue, thème clair et sombre.</p></div>
+  </div>
+</section>
+
+<!-- 9 · Valeurs -->
+<section class="scene blue" id="s9">
+  <div class="glow abs" style="width:1100px;height:1100px;left:900px;top:-100px;background:#5A74E6;opacity:.55"></div>
+  <div class="abs" id="s9lines" style="left:170px;top:190px">
+    <div class="disp" style="font-size:210px;line-height:1.08">100 % local.</div>
+    <div class="disp" style="font-size:210px;line-height:1.08">0 télémétrie.</div>
+    <div class="disp" style="font-size:210px;line-height:1.08">Libre, GPLv3.</div>
+  </div>
+</section>
+
+<!-- 10 · Final -->
+<section class="scene night" id="s10">
+  <div class="glow abs" id="s10glow" style="width:1000px;height:1000px;left:460px;top:-60px;background:#2447D6;opacity:.45"></div>
+  <div class="abs" id="s10icon" style="width:200px;height:200px"><img src="assets/pics-icone.svg" width="200" height="200"></div>
+  <div class="abs disp" id="s10word" style="font-size:160px;color:#fff;white-space:nowrap">OpenPics</div>
+  <div class="abs" id="s10btn" style="left:0;width:1920px;text-align:center;top:690px"><span style="display:inline-flex;align-items:center;gap:18px;background:var(--blue);color:#fff;font:600 44px Inter;padding:26px 48px;border-radius:var(--r2);box-shadow:0 20px 60px rgba(36,71,214,.55)">Téléchargez-le sur open.glsc.fr<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></span></div>
+  <div class="abs" id="s10by" style="left:0;width:1920px;top:930px;display:flex;justify-content:center;align-items:center;gap:20px;color:#A3ADC2;font-size:30px;font-weight:500">
+    <span>Créé avec</span>
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="#EF4565"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 2.7 5 6.2 5c2 0 3.3 1 3.8 2 .5-1 1.8-2 3.8-2 3.500 0 5.300 3.400 3.800 6.800C19.500 16.400 12 21 12 21Z" transform="translate(0 -.5)"/></svg>
+    <span>par</span><img src="assets/studioglsc-logo-fond-sombre.svg" height="52">
+  </div>
+</section>
+
+<div id="fade" class="abs" style="inset:0;width:1920px;height:1080px;background:#000;opacity:0;pointer-events:none;z-index:99"></div>
+</div>
+<script src="timeline.js"></script>
+</body>
+</html>

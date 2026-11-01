@@ -25,6 +25,9 @@ jobs:
           cache-dependency-path: pics/ui/package-lock.json
       - run: npm ci
         working-directory: pics/ui
+      - name: Interface
+        working-directory: pics/ui
+        run: npm run build
       - name: Installeurs NSIS et MSI
         working-directory: pics/crates/app
         run: ../../ui/node_modules/.bin/tauri build

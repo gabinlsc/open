@@ -3,6 +3,7 @@
   "productName": "OpenPics",
   "version": "0.1.0",
   "identifier": "fr.glsc.open.pics",
+  "mainBinaryName": "openpics",
   "build": {
     "frontendDist": "../../ui/dist",
     "devUrl": "http://localhost:5173",
@@ -29,7 +30,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis", "msi"],
-    "category": "Graphics",
+    "category": "GraphicsAndDesign",
     "shortDescription": "Éditeur d'images libre et local",
     "licenseFile": "../../../LICENSE",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],

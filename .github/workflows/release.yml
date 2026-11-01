@@ -35,7 +35,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path portable/OpenPics | Out-Null
-          Copy-Item pics/target/release/openpics.exe portable/OpenPics/OpenPics.exe
+          $exe = if (Test-Path pics/target/release/openpics.exe) { "pics/target/release/openpics.exe" } else { "pics/target/release/openpics-app.exe" }
+          Copy-Item $exe portable/OpenPics/OpenPics.exe
           New-Item -ItemType File -Path portable/OpenPics/portable | Out-Null
           Compress-Archive -Path portable/OpenPics -DestinationPath OpenPics-portable-x64.zip
       - name: Empreintes et releases.json

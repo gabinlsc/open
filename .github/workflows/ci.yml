@@ -125,7 +125,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path portable/OpenPics | Out-Null
-          Copy-Item target/release/openpics.exe portable/OpenPics/OpenPics.exe
+          $exe = if (Test-Path target/release/openpics.exe) { "target/release/openpics.exe" } else { "target/release/openpics-app.exe" }
+          Copy-Item $exe portable/OpenPics/OpenPics.exe
           # Le fichier « portable » range les préférences à côté de l'exécutable (data/).
           New-Item -ItemType File -Path portable/OpenPics/portable | Out-Null
           Compress-Archive -Path portable/OpenPics -DestinationPath OpenPics-portable-x64.zip

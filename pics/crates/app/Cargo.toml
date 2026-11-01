@@ -12,7 +12,8 @@ build = "build.rs"
 name = "openpics_app"
 
 [[bin]]
-name = "openpics"
+# Même nom que le paquet : Tauri construit `openpics-app` puis le renomme en `mainBinaryName` (openpics).
+name = "openpics-app"
 path = "src/main.rs"
 required-features = ["shell"]
 

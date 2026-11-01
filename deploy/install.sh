@@ -76,16 +76,27 @@ if [[ $RELEASE -eq 1 ]]; then
   fi
 fi
 
-# 4. nginx (optionnel).
+# 4. nginx (optionnel). Config HTTP seule ; le HTTPS est ajouté par certbot. Une config existante n'est jamais écrasée
+#    (certbot l'a modifiée), et une config qui ne passe pas `nginx -t` est retirée pour ne pas bloquer les autres sites.
 if [[ $NGINX -eq 1 ]]; then
   [[ $EUID -eq 0 || $DRY -eq 1 ]] || { echo "--nginx demande les droits root (sudo)" >&2; exit 1; }
   CONF=/etc/nginx/sites-available/open.glsc.fr
-  sed "s#root /var/www/open.glsc.fr;#root $DIR;#" "$REPO_DIR/deploy/nginx.conf" > "$WORK/nginx.conf"
-  run install -m 0644 "$WORK/nginx.conf" "$CONF"
-  run ln -sfn "$CONF" /etc/nginx/sites-enabled/open.glsc.fr
-  if [[ $DRY -eq 0 ]]; then
-    echo "ℹ le certificat doit exister avant le rechargement : certbot certonly --nginx -d open.glsc.fr"
-    nginx -t && systemctl reload nginx && echo "✓ nginx rechargé"
+  LINK=/etc/nginx/sites-enabled/open.glsc.fr
+  if [[ -e "$CONF" ]]; then
+    echo "ℹ $CONF existe déjà : conservée (certbot y a peut-être ajouté le HTTPS)."
+  else
+    sed "s#root /var/www/open.glsc.fr;#root $DIR;#" "$REPO_DIR/deploy/nginx.conf" > "$WORK/nginx.conf"
+    run install -m 0644 "$WORK/nginx.conf" "$CONF"
+    run ln -sfn "$CONF" "$LINK"
+    if [[ $DRY -eq 0 ]]; then
+      if nginx -t 2>/dev/null; then
+        systemctl reload nginx && echo "✓ nginx rechargé (HTTP). Pour le HTTPS : certbot --nginx -d open.glsc.fr"
+      else
+        rm -f "$LINK"
+        echo "✗ nginx -t échoue avec cette config : elle a été désactivée (aucun autre site n'est touché). Détail : nginx -t" >&2
+        exit 1
+      fi
+    fi
   fi
 fi
 

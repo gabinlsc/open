@@ -3,14 +3,14 @@
 Tout se lance **sur le serveur** (Linux, nginx, accès root) ; le site est un dossier de fichiers statiques.
 
 ```bash
-# Première installation : site + config nginx + dernière version publiée
+# Première installation : site + config nginx (HTTP) + dernière version publiée
 curl -fsSL https://raw.githubusercontent.com/gabinlsc/openpics/main/deploy/install.sh | sudo bash -s -- --nginx --release
 
 # Mise à jour (même commande, sans --nginx)
 curl -fsSL https://raw.githubusercontent.com/gabinlsc/openpics/main/deploy/install.sh | sudo bash -s -- --release
 ```
 
-Avant `--nginx` : DNS de `open.glsc.fr` vers le serveur, puis `sudo certbot certonly --nginx -d open.glsc.fr` (la config attend le certificat Let's Encrypt).
+Avant `--nginx` : le DNS de `open.glsc.fr` doit pointer vers le serveur. `--nginx` installe une config HTTP ; ensuite `sudo certbot --nginx -d open.glsc.fr` obtient le certificat et ajoute le HTTPS (il modifie la config : le script ne la réécrira plus, et ne touche jamais à une config existante).
 Pour relire le script avant de l'exécuter : `curl -fsSL …/install.sh -o install.sh && less install.sh && sudo bash install.sh --release`.
 
 Options : `--dir` (défaut `/var/www/open.glsc.fr`), `--ref` (branche ou étiquette), `--release`, `--nginx`, `--dry-run`.

@@ -68,6 +68,7 @@ pub enum Tool {
     ShapeEllipse,
     ShapeLine,
     Pen,
+    DirectSelect,
 }
 
 /// Réglages des outils de sélection.

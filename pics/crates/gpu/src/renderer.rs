@@ -56,6 +56,8 @@ pub struct FrameParams<'a> {
     pub preview_guide: Option<(openpics_core::Axis, f64)>,
     /// Sélection dont on dessine le contour (aperçu du geste en cours, sinon celle du document).
     pub selection: Option<&'a openpics_core::TileGrid>,
+    /// Tracé, points et poignées de l'outil Sélection directe.
+    pub overlay: Option<&'a openpics_core::EditOverlay>,
 }
 
 /// Poignées natives de la fenêtre qui reçoit le canvas.
@@ -952,6 +954,38 @@ fn build_lines(frame: &FrameParams<'_>, size: (u32, u32)) -> Vec<LineVertex> {
     line([r, t], [r, b], border);
     line([r, b], [l, b], border);
     line([l, b], [l, t], border);
+
+    if let Some(ov) = frame.overlay {
+        let blue = [0.141, 0.278, 0.839, 1.0];
+        let white = [1.0, 1.0, 1.0, 1.0];
+        let scr = |p: (f64, f64)| {
+            let v = vp.doc_to_screen(openpics_core::Vec2::new(p.0, p.1));
+            [px(v.x), px(v.y)]
+        };
+        for seg in ov.segments.iter().take(MAX_OUTLINE_SEGMENTS) {
+            line(scr(seg[0]), scr(seg[1]), blue);
+        }
+        // Carré centré sur `c`, demi-côté `r` (px d'écran).
+        let mut square = |c: [f32; 2], r: f32, color: [f32; 4]| {
+            let (x0, y0, x1, y1) = (c[0] - r, c[1] - r, c[0] + r, c[1] + r);
+            line([x0, y0], [x1, y0], color);
+            line([x1, y0], [x1, y1], color);
+            line([x1, y1], [x0, y1], color);
+            line([x0, y1], [x0, y0], color);
+        };
+        for &h in &ov.handles {
+            square(scr(h), 2.0, blue);
+        }
+        for &a in &ov.anchors {
+            square(scr(a), 4.0, blue);
+            square(scr(a), 3.0, white);
+        }
+        if let Some(sel) = ov.selected {
+            for r in [1.0, 2.0, 3.0, 4.0] {
+                square(scr(sel), r, blue);
+            }
+        }
+    }
     out
 }
 
@@ -1001,6 +1035,7 @@ mod tests {
             theme: Theme::Light,
             preview_guide: None,
             selection: None,
+            overlay: None,
         };
         let img = r.render_to_rgba8(&frame, (100, 100)).unwrap();
         let p = pixel(&img, 100, 20, 20);
@@ -1024,6 +1059,7 @@ mod tests {
             theme: Theme::Light,
             preview_guide: None,
             selection: Some(&mask),
+            overlay: None,
         };
         let with = r.render_to_rgba8(&frame, (300, 300)).unwrap();
         let without = r.render_to_rgba8(&FrameParams { selection: None, ..frame }, (300, 300)).unwrap();
@@ -1062,6 +1098,7 @@ mod tests {
             theme: Theme::Light,
             preview_guide: None,
             selection: None,
+            overlay: None,
         };
         // 1 px de doc à 2 % = 0,02 px d'écran : seul le contour (4 segments) doit rester.
         assert_eq!(build_lines(&frame, (800, 600)).len(), 8);
@@ -1080,6 +1117,36 @@ mod tests {
                 None
             }
         }
+    }
+
+    #[test]
+    fn edit_overlay_draws_path_anchors_and_handles() {
+        let Some(mut r) = headless() else { return };
+        let doc = Document::new(DocId(1), "t", Size::new(100, 100)).unwrap();
+        let ov = openpics_core::EditOverlay {
+            segments: vec![[(10.0, 50.0), (90.0, 50.0)]],
+            anchors: vec![(10.0, 50.0)],
+            handles: vec![(50.0, 20.0)],
+            selected: None,
+        };
+        let base = FrameParams {
+            document: Some(&doc),
+            viewport: Viewport { zoom: 1.0, origin: Vec2::default() },
+            settings: ViewSettings { show_grid: false, show_guides: false, ..ViewSettings::default() },
+            theme: Theme::Light,
+            preview_guide: None,
+            selection: None,
+            overlay: None,
+        };
+        let plain = r.render_to_rgba8(&base, (100, 100)).unwrap();
+        let drawn = r.render_to_rgba8(&FrameParams { overlay: Some(&ov), ..base }, (100, 100)).unwrap();
+        let blue = |p: [u8; 4]| p[2] > 150 && p[0] < 100;
+        assert!(blue(pixel(&drawn, 100, 60, 50)), "le tracé est bleu : {:?}", pixel(&drawn, 100, 60, 50));
+        assert!(blue(pixel(&drawn, 100, 52, 20)), "la poignée est dessinée");
+        assert_eq!(pixel(&drawn, 100, 13, 47), [255, 255, 255, 255], "carré intérieur du point : blanc");
+        assert!(blue(pixel(&drawn, 100, 14, 46)), "carré extérieur du point : bleu");
+        assert!(!blue(pixel(&plain, 100, 60, 50)), "sans repères, pas de tracé");
+        assert_eq!(pixel(&drawn, 100, 30, 80), pixel(&plain, 100, 30, 80), "loin des repères, l'image est inchangée");
     }
 
     #[test]
@@ -1102,6 +1169,7 @@ mod tests {
             theme: Theme::Light,
             preview_guide: None,
             selection: None,
+            overlay: None,
         };
         let a = rgba.render_to_rgba8(&frame, (40, 40)).unwrap();
         let b = bgra.render_to_rgba8(&frame, (40, 40)).unwrap();
@@ -1128,6 +1196,7 @@ mod tests {
             theme: Theme::Light,
             preview_guide: None,
             selection: None,
+            overlay: None,
         };
         let img = r.render_to_rgba8(&frame, (700, 700)).unwrap();
         // pixel doc (10,10) -> écran (20+20 .. 20+22, 30+20 .. 30+22)
@@ -1155,6 +1224,7 @@ mod tests {
                 theme: Theme::Dark,
                 preview_guide: None,
                 selection: None,
+                overlay: None,
             }
         }
         let a = r.render_to_rgba8(&frame(&doc), (300, 300)).unwrap();
@@ -1180,6 +1250,7 @@ mod tests {
             theme: Theme::Light,
             preview_guide: None,
             selection: None,
+            overlay: None,
         };
         let a = r.render_to_rgba8(&frame, (300, 300)).unwrap();
         assert_eq!(pixel(&a, 300, 10, 10), [31, 39, 184, 255], "produit attendu, pas le dernier calque tel quel");
@@ -1204,6 +1275,7 @@ mod tests {
             theme: Theme::Light,
             preview_guide: None,
             selection: None,
+            overlay: None,
         };
         let img = r.render_to_rgba8(&frame, (200, 200)).unwrap();
         let p = pixel(&img, 200, 60, 150);

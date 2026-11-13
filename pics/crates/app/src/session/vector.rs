@@ -23,6 +23,36 @@ pub(super) struct PenState {
     dragging: bool,
 }
 
+/// Partie d'un point que l'on déplace avec la Sélection directe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NodePart {
+    Anchor,
+    In,
+    Out,
+}
+
+/// Glissé en cours avec la Sélection directe : la forme est modifiée en direct, sans historique, puis une seule
+/// étape est enregistrée au relâchement (l'état d'origine est gardé pour cela et pour Échap).
+pub(super) struct NodeDrag {
+    layer: LayerId,
+    path: usize,
+    anchor: usize,
+    part: NodePart,
+    original: (LayerKind, TileGrid),
+    moved: bool,
+}
+
+/// Rayon de prise d'un point ou d'une poignée, en pixels d'écran.
+const NODE_HIT_PX: f64 = 7.0;
+
+fn add(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
+    (a.0 + b.0, a.1 + b.1)
+}
+
+fn has_handle(h: (f64, f64)) -> bool {
+    h.0.abs() > 1e-9 || h.1.abs() > 1e-9
+}
+
 impl Session {
     fn raster_for(&self, model: &VectorModel) -> Result<TileGrid, SessionError> {
         let size = self.entry()?.doc.size();
@@ -409,6 +439,168 @@ impl Session {
     pub(super) fn vector_cancel(&mut self) {
         self.shape_drag = None;
         self.pen = None;
+        // Échap pendant un glissé de point : la forme revient à son état d'avant le geste.
+        if let Some(d) = self.node_drag.take() {
+            if let Ok(e) = self.entry_mut() {
+                if let Ok(l) = e.doc.layer_mut(d.layer) {
+                    l.kind = d.original.0;
+                    l.pixels = d.original.1;
+                }
+                e.doc.touch();
+            }
+        }
+    }
+
+    // ---- sélection directe (édition des nœuds) --------------------------------------------------------------------
+
+    /// Forme du calque actif, s'il en est une.
+    fn active_shape(&self) -> Option<(LayerId, VectorModel)> {
+        let e = self.entry().ok()?;
+        let id = e.active_layer?;
+        let model = e.doc.layer(id).ok()?.shape()?.clone();
+        Some((id, model))
+    }
+
+    /// Clic avec la Sélection directe : prend la poignée ou le point le plus proche de la forme active.
+    /// Alt + clic sur un point le rend anguleux (poignées supprimées).
+    pub(super) fn node_down(&mut self, p: &Pointer, at: (f64, f64)) -> Result<(), SessionError> {
+        let Some((layer, model)) = self.active_shape() else { return Ok(()) };
+        let zoom = self.viewport().zoom;
+        let near = |q: (f64, f64)| (q.0 - at.0).hypot(q.1 - at.1) * zoom <= NODE_HIT_PX;
+        let mut hit = None;
+        // Poignées d'abord : elles sont souvent posées tout près de leur point.
+        'search: for (pi, path) in model.paths.iter().enumerate() {
+            for (ai, a) in path.anchors.iter().enumerate() {
+                if has_handle(a.h_in) && near(add(a.pos, a.h_in)) {
+                    hit = Some((pi, ai, NodePart::In));
+                    break 'search;
+                }
+                if has_handle(a.h_out) && near(add(a.pos, a.h_out)) {
+                    hit = Some((pi, ai, NodePart::Out));
+                    break 'search;
+                }
+            }
+        }
+        if hit.is_none() {
+            'anchors: for (pi, path) in model.paths.iter().enumerate() {
+                for (ai, a) in path.anchors.iter().enumerate() {
+                    if near(a.pos) {
+                        hit = Some((pi, ai, NodePart::Anchor));
+                        break 'anchors;
+                    }
+                }
+            }
+        }
+        let Some((path, anchor, part)) = hit else { return Ok(()) };
+        if p.alt && part == NodePart::Anchor {
+            let mut m = model;
+            let a = &mut m.paths[path].anchors[anchor];
+            if !has_handle(a.h_in) && !has_handle(a.h_out) {
+                return Ok(());
+            }
+            a.h_in = (0.0, 0.0);
+            a.h_out = (0.0, 0.0);
+            let pixels = self.raster_for(&m)?;
+            self.entry_mut()?.doc.execute(Box::new(SetLayerContent::new(
+                "Point anguleux",
+                layer,
+                LayerKind::Shape(Box::new(m)),
+                pixels,
+            )))?;
+            return Ok(());
+        }
+        let l = self.entry()?.doc.layer(layer)?;
+        let original = (l.kind.clone(), l.pixels.clone());
+        self.node_drag = Some(NodeDrag { layer, path, anchor, part, original, moved: false });
+        Ok(())
+    }
+
+    /// Déplacement en direct. Une poignée garde son opposée symétrique (courbe lisse), sauf avec Alt.
+    pub(super) fn node_move(&mut self, p: &Pointer, at: (f64, f64)) -> Result<(), SessionError> {
+        let Some(d) = &self.node_drag else { return Ok(()) };
+        let LayerKind::Shape(base) = &d.original.0 else { return Ok(()) };
+        let mut m = (**base).clone();
+        let a = &mut m.paths[d.path].anchors[d.anchor];
+        match d.part {
+            NodePart::Anchor => a.pos = at,
+            NodePart::In => {
+                a.h_in = (at.0 - a.pos.0, at.1 - a.pos.1);
+                if !p.alt {
+                    a.h_out = (-a.h_in.0, -a.h_in.1);
+                }
+            }
+            NodePart::Out => {
+                a.h_out = (at.0 - a.pos.0, at.1 - a.pos.1);
+                if !p.alt {
+                    a.h_in = (-a.h_out.0, -a.h_out.1);
+                }
+            }
+        }
+        let m = m.sanitized();
+        let pixels = self.raster_for(&m)?;
+        let layer = d.layer;
+        let e = self.entry_mut()?;
+        let l = e.doc.layer_mut(layer)?;
+        l.kind = LayerKind::Shape(Box::new(m));
+        l.pixels = pixels;
+        e.doc.touch();
+        if let Some(d) = &mut self.node_drag {
+            d.moved = true;
+        }
+        Ok(())
+    }
+
+    /// Relâchement : une seule étape d'historique pour tout le glissé.
+    pub(super) fn node_up(&mut self) -> Result<(), SessionError> {
+        let Some(d) = self.node_drag.take() else { return Ok(()) };
+        if !d.moved {
+            return Ok(());
+        }
+        let e = self.entry_mut()?;
+        let l = e.doc.layer_mut(d.layer)?;
+        let kind = std::mem::replace(&mut l.kind, d.original.0);
+        let pixels = std::mem::replace(&mut l.pixels, d.original.1);
+        e.doc.execute(Box::new(SetLayerContent::new("Modifier les nœuds", d.layer, kind, pixels)))?;
+        Ok(())
+    }
+
+    /// Repères à dessiner : tracé de la forme active, bras des poignées, points ; seulement avec la Sélection directe.
+    pub(super) fn node_overlay(&self) -> Option<openpics_core::EditOverlay> {
+        if self.tool != Tool::DirectSelect {
+            return None;
+        }
+        let (_, model) = self.active_shape()?;
+        let zoom = self.viewport().zoom.max(1e-6);
+        let mut ov = openpics_core::EditOverlay::default();
+        for path in &model.paths {
+            let pts = path.flatten(0.5 / zoom);
+            for w in pts.windows(2) {
+                ov.segments.push([w[0], w[1]]);
+            }
+            if path.closed && pts.len() > 2 {
+                ov.segments.push([pts[pts.len() - 1], pts[0]]);
+            }
+            for a in &path.anchors {
+                for h in [a.h_in, a.h_out] {
+                    if has_handle(h) {
+                        let end = add(a.pos, h);
+                        ov.segments.push([a.pos, end]);
+                        ov.handles.push(end);
+                    }
+                }
+                ov.anchors.push(a.pos);
+            }
+        }
+        if let Some(d) = &self.node_drag {
+            if let Some(a) = model.paths.get(d.path).and_then(|p| p.anchors.get(d.anchor)) {
+                ov.selected = Some(match d.part {
+                    NodePart::Anchor => a.pos,
+                    NodePart::In => add(a.pos, a.h_in),
+                    NodePart::Out => add(a.pos, a.h_out),
+                });
+            }
+        }
+        Some(ov)
     }
 }
 
@@ -446,6 +638,72 @@ mod tests {
 
     fn layer_px(s: &Session, id: u64, x: u32, y: u32) -> [u8; 4] {
         s.render_state().document.unwrap().layer(LayerId(id)).unwrap().pixels.get_pixel(x, y)
+    }
+
+    fn anchors_of(s: &Session, id: u64) -> Vec<Anchor> {
+        s.render_state().document.unwrap().layer(LayerId(id)).unwrap().shape().unwrap().paths[0].anchors.clone()
+    }
+
+    #[test]
+    fn direct_selection_moves_a_point_live_then_records_one_undoable_step() {
+        let mut s = session();
+        s.set_tool(Tool::ShapeRect);
+        drag(&mut s, (20.0, 20.0), (80.0, 60.0));
+        let id = s.snapshot().active_layer_id.unwrap();
+        assert!(s.render_state().overlay.is_none(), "pas de repères hors de la Sélection directe");
+        s.set_tool(Tool::DirectSelect);
+        let ov = s.render_state().overlay.unwrap();
+        assert_eq!(ov.anchors.len(), 4);
+        assert!(ov.segments.len() >= 4, "le tracé est dessiné");
+        let n = s.snapshot().history.names.len();
+        s.pointer_down(&at(80.0, 60.0)).unwrap();
+        s.pointer_move(&at(100.0, 75.0)).unwrap();
+        assert_eq!(s.snapshot().history.names.len(), n, "rien dans l'historique pendant le glissé");
+        assert_eq!(s.render_state().overlay.unwrap().selected, Some((100.0, 75.0)));
+        s.pointer_move(&at(120.0, 90.0)).unwrap();
+        s.pointer_up(&at(120.0, 90.0)).unwrap();
+        assert_eq!(anchors_of(&s, id)[2].pos, (120.0, 90.0));
+        assert_eq!(layer_px(&s, id, 110, 80)[3], 255, "la forme suit le point déplacé");
+        let names = s.snapshot().history.names;
+        assert_eq!((names.len(), names.last().unwrap().as_str()), (n + 1, "Modifier les nœuds"));
+        s.undo().unwrap();
+        assert_eq!(anchors_of(&s, id)[2].pos, (80.0, 60.0));
+        assert_eq!(layer_px(&s, id, 110, 80)[3], 0);
+        // Un clic loin de tout point ne fait rien ; Échap pendant un glissé rend la forme d'origine.
+        drag(&mut s, (150.0, 10.0), (160.0, 20.0));
+        assert_eq!(s.snapshot().history.position, n, "aucune étape ajoutée");
+        assert!(s.snapshot().can_redo, "l'étape annulée reste rétablissable");
+        s.pointer_down(&at(20.0, 20.0)).unwrap();
+        s.pointer_move(&at(5.0, 5.0)).unwrap();
+        s.tool_cancel();
+        assert_eq!(anchors_of(&s, id)[0].pos, (20.0, 20.0));
+        assert_eq!(s.snapshot().history.position, n);
+    }
+
+    #[test]
+    fn handles_stay_symmetric_unless_alt_and_alt_click_makes_a_corner() {
+        let mut s = session();
+        s.set_tool(Tool::ShapeEllipse);
+        drag(&mut s, (20.0, 20.0), (100.0, 80.0));
+        let id = s.snapshot().active_layer_id.unwrap();
+        let first = anchors_of(&s, id)[0];
+        assert_eq!(first.pos, (100.0, 50.0));
+        let handle = (first.pos.0 + first.h_out.0, first.pos.1 + first.h_out.1);
+        s.set_tool(Tool::DirectSelect);
+        drag(&mut s, handle, (120.0, 70.0));
+        let a = anchors_of(&s, id)[0];
+        assert_eq!((a.h_out, a.h_in), ((20.0, 20.0), (-20.0, -20.0)), "poignées symétriques : courbe lisse");
+        let alt = |x: f64, y: f64| Pointer { alt: true, ..at(x, y) };
+        s.pointer_down(&alt(120.0, 70.0)).unwrap();
+        s.pointer_move(&alt(110.0, 80.0)).unwrap();
+        s.pointer_up(&alt(110.0, 80.0)).unwrap();
+        let a = anchors_of(&s, id)[0];
+        assert_eq!((a.h_out, a.h_in), ((10.0, 30.0), (-20.0, -20.0)), "Alt casse la symétrie");
+        s.pointer_down(&alt(100.0, 50.0)).unwrap();
+        s.pointer_up(&alt(100.0, 50.0)).unwrap();
+        let a = anchors_of(&s, id)[0];
+        assert_eq!((a.h_in, a.h_out), ((0.0, 0.0), (0.0, 0.0)), "Alt + clic : point anguleux");
+        assert_eq!(s.snapshot().history.names.last().unwrap(), "Point anguleux");
     }
 
     #[test]

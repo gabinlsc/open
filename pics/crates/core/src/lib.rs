@@ -26,4 +26,4 @@ pub use error::CoreError;
 pub use geom::{IRect, Size, Vec2};
 pub use styles::LayerStyle;
 pub use tile::{TILE_SIZE, Tile, TileGrid, TileKey};
-pub use view::{ViewSettings, Viewport};
+pub use view::{EditOverlay, ViewSettings, Viewport};

@@ -103,6 +103,7 @@ fn run(mut renderer: Renderer, rx: Receiver<RenderMsg>, shared: &Shared) {
             },
             preview_guide: state.preview_guide,
             selection: state.selection.as_ref(),
+            overlay: state.overlay.as_ref(),
         };
         if redraw {
             if let Err(e) = renderer.render(&frame) {

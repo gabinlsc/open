@@ -51,6 +51,7 @@ fn dump(ctx: &mut Ctx, name: &str, s: &Session) {
         theme: if state.theme == ResolvedTheme::Dark { Theme::Dark } else { Theme::Light },
         preview_guide: None,
         selection: state.selection.as_ref(),
+        overlay: state.overlay.as_ref(),
     };
     let rgba = ctx.renderer.render_to_rgba8(&frame, ctx.canvas).expect("rendu");
     image::save_buffer(ctx.out.join(format!("{name}.png")), &rgba, ctx.canvas.0, ctx.canvas.1, image::ColorType::Rgba8)
@@ -69,6 +70,7 @@ fn art(ctx: &mut Ctx, name: &str, s: &Session) {
         theme: Theme::Light,
         preview_guide: None,
         selection: state.selection.as_ref(),
+        overlay: state.overlay.as_ref(),
     };
     let rgba = ctx.renderer.render_to_rgba8(&frame, (size.width, size.height)).expect("rendu");
     let dir = ctx.out.join("art");

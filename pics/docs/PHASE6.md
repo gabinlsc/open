@@ -8,7 +8,7 @@
 - Sérialisation `.ocv` : les modèles texte et forme sont conservés (le document rouvert reste éditable).
 
 ## Limites assumées
-- Pas d'édition de nœuds sur un tracé existant (on le redessine ou on le combine).
+- Édition de nœuds (ajoutée ensuite) : outil **Sélection directe** (A) pour déplacer points et poignées d'une forme, poignées symétriques (Alt pour les rendre indépendantes), Alt + clic pour un point anguleux. Pas encore d'ajout ni de suppression de point.
 - Texte sur tracé : première ligne uniquement.
 - Pas de jonctions de contour à angle vif (miter) : jonctions rondes.
 - Import SVG : rastérisation uniquement, pas de conversion en formes éditables.

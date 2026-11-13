@@ -65,6 +65,7 @@ pub struct Session {
     stroke: Option<paint::ActiveStroke>,
     filter_preview: Option<filters::FilterPreview>,
     pen: Option<vector::PenState>,
+    node_drag: Option<vector::NodeDrag>,
     shape_drag: Option<((f64, f64), bool)>,
     /// Source du tampon et du correcteur (Alt + clic) et décalage source − destination une fois fixé.
     clone_source: Option<(f64, f64)>,
@@ -88,6 +89,8 @@ pub struct RenderState {
     pub preview_guide: Option<(Axis, f64)>,
     /// Sélection à contourner : l'aperçu du geste en cours, sinon la sélection du document.
     pub selection: Option<TileGrid>,
+    /// Tracé, points et poignées de la forme active (outil Sélection directe).
+    pub overlay: Option<openpics_core::EditOverlay>,
 }
 
 impl Session {
@@ -107,6 +110,7 @@ impl Session {
             stroke: None,
             filter_preview: None,
             pen: None,
+            node_drag: None,
             shape_drag: None,
             clone_source: None,
             clone_offset: None,
@@ -752,6 +756,7 @@ impl Session {
                 .selection_preview
                 .clone()
                 .or_else(|| self.entry().ok().and_then(|e| e.doc.selection.clone())),
+            overlay: self.node_overlay(),
         }
     }
 

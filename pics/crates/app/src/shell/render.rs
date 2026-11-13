@@ -12,9 +12,14 @@ use openpics_gpu::{FrameParams, Renderer, Theme, WindowTarget};
 use super::Shared;
 use crate::dto::ResolvedTheme;
 
+/// Image lue : largeur, hauteur, pixels RGBA.
+pub type Frame = (u32, u32, Vec<u8>);
+
 pub enum RenderMsg {
     Redraw,
     Resize(u32, u32),
+    /// Rendu de l'image courante lu en RGBA (largeur, hauteur, pixels), pour l'image figée sous les menus.
+    Snapshot(Sender<Result<Frame, String>>),
     Stop,
 }
 
@@ -62,9 +67,11 @@ fn run(mut renderer: Renderer, rx: Receiver<RenderMsg>, shared: &Shared) {
         let mut redraw = false;
         let mut stop = false;
         let mut resize = None;
+        let mut snapshots = Vec::new();
         for msg in std::iter::once(first).chain(rx.try_iter()) {
             match msg {
                 RenderMsg::Redraw => redraw = true,
+                RenderMsg::Snapshot(reply) => snapshots.push(reply),
                 RenderMsg::Resize(w, h) => {
                     resize = Some((w, h));
                     redraw = true;
@@ -78,7 +85,7 @@ fn run(mut renderer: Renderer, rx: Receiver<RenderMsg>, shared: &Shared) {
         if let Some((w, h)) = resize {
             renderer.resize(w, h);
         }
-        if !redraw {
+        if !redraw && snapshots.is_empty() {
             continue;
         }
         // Copie sous verrou, dessin sans : le verrou n'est jamais tenu pendant le vsync.
@@ -97,8 +104,18 @@ fn run(mut renderer: Renderer, rx: Receiver<RenderMsg>, shared: &Shared) {
             preview_guide: state.preview_guide,
             selection: state.selection.as_ref(),
         };
-        if let Err(e) = renderer.render(&frame) {
-            eprintln!("rendu impossible : {e}");
+        if redraw {
+            if let Err(e) = renderer.render(&frame) {
+                eprintln!("rendu impossible : {e}");
+            }
+        }
+        if !snapshots.is_empty() {
+            let size = renderer.size();
+            let result =
+                renderer.render_to_rgba8(&frame, size).map(|px| (size.0, size.1, px)).map_err(|e| e.to_string());
+            for reply in snapshots {
+                let _ = reply.send(result.clone());
+            }
         }
     }
 }

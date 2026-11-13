@@ -115,6 +115,8 @@ pub struct Renderer {
     surface: Option<wgpu::Surface<'static>>,
     surface_config: Option<wgpu::SurfaceConfiguration>,
     size: (u32, u32),
+    /// Format des pipelines (celui de la surface, ou RGBA sans fenêtre) : toute cible de rendu doit l'utiliser.
+    format: wgpu::TextureFormat,
     globals_buf: wgpu::Buffer,
     globals_nearest: wgpu::BindGroup,
     globals_linear: wgpu::BindGroup,
@@ -369,6 +371,7 @@ impl Renderer {
             surface,
             surface_config,
             size,
+            format,
             globals_buf,
             globals_nearest,
             globals_linear,
@@ -429,13 +432,20 @@ impl Renderer {
         if w == 0 || h == 0 || w > 16_384 || h > 16_384 {
             return Err(GpuError::InvalidSize { width: w, height: h });
         }
+        // Les pipelines sont compilés pour le format de la surface (souvent BGRA sous Windows) : la texture
+        // hors écran doit avoir le même, puis on remet les octets dans l'ordre RGBA.
+        let swap = match self.format {
+            wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Rgba8UnormSrgb => false,
+            wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb => true,
+            other => return Err(GpuError::Readback(format!("format de surface non pris en charge : {other:?}"))),
+        };
         let target = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("offscreen"),
             size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: HEADLESS_FORMAT,
+            format: self.format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
@@ -474,6 +484,9 @@ impl Renderer {
         }
         drop(mapped);
         buffer.unmap();
+        if swap {
+            out.chunks_exact_mut(4).for_each(|p| p.swap(0, 2));
+        }
         Ok(out)
     }
 
@@ -1067,6 +1080,33 @@ mod tests {
                 None
             }
         }
+    }
+
+    #[test]
+    fn readback_matches_whatever_the_surface_format() {
+        // Une fenêtre Windows utilise souvent BGRA : la capture (image figée sous les menus) doit rester en RGBA.
+        let Some(mut rgba) = headless() else { return };
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+        let adapter = request_adapter(&instance, None).unwrap();
+        let mut bgra = Renderer::build(&adapter, None, wgpu::TextureFormat::Bgra8Unorm, (1, 1)).unwrap();
+        let mut doc = Document::new(DocId(1), "t", Size::new(8, 8)).unwrap();
+        for y in 0..8 {
+            for x in 0..8 {
+                doc.layers[0].pixels.put_pixel(x, y, [200, 30, 90, 255]);
+            }
+        }
+        let frame = FrameParams {
+            document: Some(&doc),
+            viewport: Viewport { zoom: 4.0, origin: Vec2::default() },
+            settings: ViewSettings { show_grid: false, show_guides: false, ..ViewSettings::default() },
+            theme: Theme::Light,
+            preview_guide: None,
+            selection: None,
+        };
+        let a = rgba.render_to_rgba8(&frame, (40, 40)).unwrap();
+        let b = bgra.render_to_rgba8(&frame, (40, 40)).unwrap();
+        assert_eq!(pixel(&a, 40, 10, 10), [200, 30, 90, 255]);
+        assert_eq!(a, b, "même image, octets dans le même ordre");
     }
 
     fn pixel(buf: &[u8], w: u32, x: u32, y: u32) -> [u8; 4] {

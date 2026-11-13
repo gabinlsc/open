@@ -16,5 +16,9 @@ impl Canvas {
 
     pub fn redraw(&self) {}
 
+    pub fn snapshot(&self) -> Result<crate::shell::render::Frame, String> {
+        Err("le canvas natif n'est disponible que sous Windows".into())
+    }
+
     pub fn shutdown(self) {}
 }

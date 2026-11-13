@@ -93,8 +93,8 @@ pub(crate) fn write(doc: &Document, path: &Path, format: Format, options: &Expor
 fn over_white(mut img: RgbaImage) -> RgbaImage {
     for p in img.pixels_mut() {
         let a = u32::from(p.0[3]);
-        for c in 0..3 {
-            p.0[c] = ((u32::from(p.0[c]) * a + 255 * (255 - a) + 127) / 255) as u8;
+        for c in p.0.iter_mut().take(3) {
+            *c = ((u32::from(*c) * a + 255 * (255 - a) + 127) / 255) as u8;
         }
         p.0[3] = 255;
     }

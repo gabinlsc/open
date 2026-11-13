@@ -62,7 +62,22 @@ impl RenderThread {
     }
 }
 
-fn run(mut renderer: Renderer, rx: Receiver<RenderMsg>, shared: &Shared) {
+/// Boucle de rendu protégée : une panique (bug, pilote) n'arrête plus le canvas en silence, elle s'affiche dans le
+/// bandeau d'erreur de l'interface.
+fn run(renderer: Renderer, rx: Receiver<RenderMsg>, shared: &Shared) {
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_loop(renderer, rx, shared)));
+    if let Err(panic) = outcome {
+        let msg = panic
+            .downcast_ref::<&str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| panic.downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "erreur inconnue".into());
+        shared.set_gpu_error(format!("le moteur de rendu s'est arrêté : {msg}"));
+    }
+}
+
+fn run_loop(mut renderer: Renderer, rx: Receiver<RenderMsg>, shared: &Shared) {
+    let mut last_error: Option<String> = None;
     while let Ok(first) = rx.recv() {
         let mut redraw = false;
         let mut stop = false;
@@ -106,8 +121,16 @@ fn run(mut renderer: Renderer, rx: Receiver<RenderMsg>, shared: &Shared) {
             overlay: state.overlay.as_ref(),
         };
         if redraw {
-            if let Err(e) = renderer.render(&frame) {
-                eprintln!("rendu impossible : {e}");
+            match renderer.render(&frame) {
+                // Une même erreur à chaque image ne doit pas inonder l'interface : on ne signale que les nouvelles.
+                Err(e) => {
+                    let msg = e.to_string();
+                    if last_error.as_deref() != Some(msg.as_str()) {
+                        shared.set_gpu_error(msg.clone());
+                        last_error = Some(msg);
+                    }
+                }
+                Ok(()) => last_error = None,
             }
         }
         if !snapshots.is_empty() {

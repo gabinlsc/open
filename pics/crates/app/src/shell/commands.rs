@@ -106,11 +106,16 @@ pub fn view_set_canvas(shared: State<'_, Shared>, rect: CanvasRect) -> ApiResult
 /// Image figée du canvas (voir `crate::frame`), envoyée en binaire : pas de JSON pour plusieurs mégaoctets.
 #[tauri::command]
 pub async fn view_canvas_snapshot(shared: State<'_, Shared>) -> ApiResult<tauri::ipc::Response> {
-    let shot = {
+    let rx = {
         let guard = shared.canvas.lock().map_err(|e| SessionError::InvalidArgument(e.to_string()))?;
         let canvas = guard.as_ref().ok_or_else(|| SessionError::InvalidArgument("aucun canvas".into()))?;
-        canvas.snapshot().map_err(SessionError::InvalidArgument)?
+        canvas.request_snapshot().map_err(SessionError::InvalidArgument)?
     };
+    // Attente hors verrou, et courte : un menu ne doit jamais attendre l'image figée plus d'un instant.
+    let shot = rx
+        .recv_timeout(std::time::Duration::from_millis(500))
+        .map_err(|e| SessionError::InvalidArgument(e.to_string()))?
+        .map_err(SessionError::InvalidArgument)?;
     let bytes = crate::frame::encode(shot.0, shot.1, &shot.2)
         .ok_or_else(|| SessionError::InvalidArgument("image du canvas incohérente".into()))?;
     Ok(tauri::ipc::Response::new(bytes))

@@ -16,7 +16,9 @@ impl Canvas {
 
     pub fn redraw(&self) {}
 
-    pub fn snapshot(&self) -> Result<crate::shell::render::Frame, String> {
+    pub fn request_snapshot(
+        &self,
+    ) -> Result<std::sync::mpsc::Receiver<Result<crate::shell::render::Frame, String>>, String> {
         Err("le canvas natif n'est disponible que sous Windows".into())
     }
 

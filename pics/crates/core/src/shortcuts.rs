@@ -134,6 +134,7 @@ pub const DEFAULT_BINDINGS: &[(&str, &[&str])] = &[
     ("tab.next", &["Ctrl+Tab"]),
     ("tab.prev", &["Ctrl+Shift+Tab"]),
     ("tool.hand", &["H"]),
+    ("tool.direct_select", &["A"]),
     ("tool.zoom", &["Z"]),
 ];
 

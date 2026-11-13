@@ -207,3 +207,9 @@ export const LineIcon = () => (
     <circle cx="19" cy="5" r="1.2" />
   </svg>
 );
+export const DirectSelectIcon = () => (
+  <svg {...base}>
+    <path d="M5 3.5 18 12l-5.6 1.4L9.5 19 5 3.5Z" fill="currentColor" fillOpacity=".15" />
+    <rect x="15.5" y="15.5" width="5" height="5" rx=".6" />
+  </svg>
+);

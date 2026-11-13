@@ -5,7 +5,7 @@ import { useStore } from "../store";
 import {
   BlurIcon, BrushIcon, BucketIcon, BurnIcon, CloneIcon, DodgeIcon, EllipseIcon, EraserIcon, GradientIcon, HealIcon, LineIcon, LiquifyIcon,
   PatchIcon, PenIcon, PencilIcon, RectIcon, RoundedRectIcon, SharpenIcon, SmudgeIcon, SpongeIcon, SpotHealIcon, TextIcon,
-  EllipseSelectIcon, HandIcon, LassoIcon, PolygonLassoIcon, RectSelectIcon, WandIcon, ZoomIcon } from "./Icons";
+  DirectSelectIcon, EllipseSelectIcon, HandIcon, LassoIcon, PolygonLassoIcon, RectSelectIcon, WandIcon, ZoomIcon } from "./Icons";
 
 const TOOLS: { id: Tool; label: string; action: string; icon: JSX.Element }[] = [
   { id: "hand", label: "Main", action: "tool.hand", icon: <HandIcon /> },
@@ -32,6 +32,7 @@ const TOOLS: { id: Tool; label: string; action: string; icon: JSX.Element }[] = 
   { id: "sponge", label: "Éponge", action: "tool.sponge", icon: <SpongeIcon /> },
   { id: "liquify", label: "Fluidité", action: "tool.liquify", icon: <LiquifyIcon /> },
   { id: "text", label: "Texte", action: "tool.text", icon: <TextIcon /> },
+  { id: "direct_select", label: "Sélection directe", action: "tool.direct_select", icon: <DirectSelectIcon /> },
   { id: "pen", label: "Plume", action: "tool.pen", icon: <PenIcon /> },
   { id: "shape_rect", label: "Rectangle", action: "tool.shape_rect", icon: <RectIcon /> },
   { id: "shape_rounded_rect", label: "Rectangle arrondi", action: "tool.shape_rounded", icon: <RoundedRectIcon /> },

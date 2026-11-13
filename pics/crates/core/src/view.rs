@@ -103,6 +103,18 @@ pub fn next_zoom_step(current: f64, zoom_in: bool) -> f64 {
     }
 }
 
+/// Repères d'édition dessinés par-dessus le document (coordonnées document) : tracé, points et poignées de
+/// l'outil Sélection directe.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct EditOverlay {
+    /// Segments du tracé et des bras de poignées.
+    pub segments: Vec<[(f64, f64); 2]>,
+    pub anchors: Vec<(f64, f64)>,
+    pub handles: Vec<(f64, f64)>,
+    /// Point ou poignée en cours de manipulation.
+    pub selected: Option<(f64, f64)>,
+}
+
 /// Réglages d'affichage, communs à tous les documents.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ViewSettings {

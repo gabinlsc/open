@@ -33,7 +33,7 @@ const EN: Record<string, string> = {
   "Gomme": "Eraser", "Dégradé": "Gradient", "Pot de peinture": "Paint bucket", "Tampon de duplication": "Clone stamp",
   "Correcteur": "Healing brush", "Correcteur localisé": "Spot healing", "Pièce": "Patch", "Goutte d'eau (flou)": "Blur",
   "Netteté": "Sharpen", "Doigt": "Smudge", "Densité −": "Dodge", "Densité +": "Burn", "Éponge": "Sponge", "Fluidité": "Liquify",
-  "Texte": "Text", "Plume": "Pen", "Rectangle": "Rectangle", "Rectangle arrondi": "Rounded rectangle", "Ellipse": "Ellipse", "Ligne": "Line",
+  "Texte": "Text", "Plume": "Pen", "Sélection directe": "Direct selection", "Rectangle": "Rectangle", "Rectangle arrondi": "Rounded rectangle", "Ellipse": "Ellipse", "Ligne": "Line",
   "Valider la forme en cours": "Commit current shape", "Annuler la forme en cours": "Cancel current shape",
 };
 

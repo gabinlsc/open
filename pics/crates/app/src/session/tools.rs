@@ -99,6 +99,7 @@ impl Session {
             | Tool::ShapeEllipse
             | Tool::ShapeLine
             | Tool::Pen => self.vector_down(p, at)?,
+            Tool::DirectSelect => self.node_down(p, at)?,
             _ => self.paint_down(p, at)?,
         }
         Ok(())
@@ -108,6 +109,9 @@ impl Session {
         let at = self.doc_point(p);
         if self.stroke.is_some() {
             return self.paint_move(p, at);
+        }
+        if self.node_drag.is_some() {
+            return self.node_move(p, at);
         }
         if self.shape_drag.is_some() || self.pen.is_some() {
             return self.vector_move(at);
@@ -131,6 +135,9 @@ impl Session {
         let at = self.doc_point(p);
         if self.stroke.is_some() {
             return self.paint_up(p, at);
+        }
+        if self.node_drag.is_some() {
+            return self.node_up();
         }
         if self.shape_drag.is_some() || self.pen.is_some() {
             return self.vector_up(at);

@@ -212,6 +212,7 @@ export const ACTIONS: Record<string, ActionDef> = {
   "tool.shape_rounded": { label: "Rectangle arrondi", run: () => void st().run(() => api.setTool("shape_rounded_rect")) },
   "tool.shape_ellipse": { label: "Ellipse", run: () => void st().run(() => api.setTool("shape_ellipse")) },
   "tool.shape_line": { label: "Ligne", run: () => void st().run(() => api.setTool("shape_line")) },
+  "tool.direct_select": { label: "Sélection directe", run: () => void st().run(() => api.setTool("direct_select")) },
   "tool.pen": { label: "Plume", run: () => void st().run(() => api.setTool("pen")) },
   "layer.rasterize": {
     label: "Rastériser le calque",

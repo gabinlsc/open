@@ -3,6 +3,7 @@
 pub mod batch;
 pub mod dto;
 pub mod error;
+pub mod frame;
 pub mod prefs;
 pub mod recovery;
 pub mod saved_actions;

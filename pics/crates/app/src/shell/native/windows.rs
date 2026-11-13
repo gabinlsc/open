@@ -177,6 +177,13 @@ impl Canvas {
         let _ = self.tx.send(RenderMsg::Redraw);
     }
 
+    /// Image actuellement affichée, rendue à nouveau hors écran (le thread de rendu reste seul maître du GPU).
+    pub fn snapshot(&self) -> Result<crate::shell::render::Frame, String> {
+        let (reply, rx) = std::sync::mpsc::channel();
+        self.tx.send(RenderMsg::Snapshot(reply)).map_err(|e| e.to_string())?;
+        rx.recv_timeout(std::time::Duration::from_secs(2)).map_err(|e| e.to_string())?
+    }
+
     pub fn shutdown(self) {
         if let Ok(mut slot) = self.render.lock() {
             if let Some(render) = slot.take() {

@@ -67,6 +67,7 @@ export const api = {
   docActivate: (id: number) => call<Snapshot>("doc_activate", { id }),
   setCanvas: (rect: CanvasRect) => call<Snapshot>("view_set_canvas", { rect }),
   setCanvasVisible: (visible: boolean) => call<void>("view_set_canvas_visible", { visible }),
+  canvasSnapshot: () => call<ArrayBuffer>("view_canvas_snapshot"),
   zoom: (zoomIn: boolean) => call<Snapshot>("view_zoom", { zoomIn, anchorX: null, anchorY: null }),
   zoomTo: (zoom: number) => call<Snapshot>("view_zoom_to", { zoom }),
   fit: () => call<Snapshot>("view_fit"),

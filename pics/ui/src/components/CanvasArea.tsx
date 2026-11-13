@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { api } from "../api";
 import { ACTIONS } from "../actions";
 import { physicalRect, setCanvasHost } from "../canvasHost";
+import { decodeFrame } from "../frozenFrame";
 import { useStore } from "../store";
 import { RULER_SIZE, Rulers } from "./Rulers";
 
@@ -15,6 +16,8 @@ export function CanvasArea() {
   const overlay = useStore((s) => s.dialog !== null || s.menuOpen);
   const showRulers = useStore((s) => s.snapshot?.settings.showRulers ?? true);
   const hostRef = useRef<HTMLDivElement>(null);
+  const frozenRef = useRef<HTMLCanvasElement>(null);
+  const [frozen, setFrozen] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const last = useRef("");
 
@@ -35,8 +38,38 @@ export function CanvasArea() {
     return () => setCanvasHost(null);
   }, [hasDoc, showRulers, measure]);
 
+  // La fenêtre native passe toujours au-dessus du HTML : pendant un menu ou une boîte de dialogue, on la cache
+  // et on affiche à sa place la dernière image rendue (image figée), sinon le document disparaîtrait.
   useEffect(() => {
-    if (hasDoc) void api.setCanvasVisible(!overlay).catch(() => undefined);
+    if (!hasDoc) return;
+    let cancelled = false;
+    if (overlay) {
+      void (async () => {
+        try {
+          const frame = decodeFrame(await api.canvasSnapshot());
+          const el = frozenRef.current;
+          const ctx = el?.getContext("2d");
+          if (!cancelled && frame && el && ctx) {
+            el.width = frame.width;
+            el.height = frame.height;
+            ctx.putImageData(new ImageData(frame.data, frame.width, frame.height), 0, 0);
+            setFrozen(true);
+          }
+        } catch {
+          // Sans image figée, la zone reste vide le temps du menu : comportement d'avant, rien de cassé.
+        }
+        if (!cancelled) await api.setCanvasVisible(false).catch(() => undefined);
+      })();
+    } else {
+      void api
+        .setCanvasVisible(true)
+        .catch(() => undefined)
+        // La fenêtre native réapparaît d'abord, l'image figée est retirée ensuite : pas de clignotement.
+        .then(() => setTimeout(() => !cancelled && setFrozen(false), 60));
+    }
+    return () => {
+      cancelled = true;
+    };
   }, [overlay, hasDoc]);
 
   useEffect(() => {
@@ -72,7 +105,9 @@ export function CanvasArea() {
   return (
     <div className="center" style={{ gridTemplateColumns: `${r}px 1fr`, gridTemplateRows: `${r}px 1fr` }}>
       {showRulers && <Rulers width={size.width} height={size.height} />}
-      <div ref={hostRef} className="canvas-host" style={{ gridColumn: 2, gridRow: 2 }} aria-label="Zone de dessin" />
+      <div ref={hostRef} className="canvas-host" style={{ gridColumn: 2, gridRow: 2 }} aria-label="Zone de dessin">
+        <canvas ref={frozenRef} className="canvas-frozen" hidden={!frozen} aria-hidden="true" />
+      </div>
     </div>
   );
 }

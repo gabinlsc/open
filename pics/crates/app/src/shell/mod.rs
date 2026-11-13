@@ -177,6 +177,7 @@ pub fn run() {
             commands::doc_activate,
             commands::view_set_canvas,
             commands::view_set_canvas_visible,
+            commands::view_canvas_snapshot,
             commands::view_zoom,
             commands::view_zoom_to,
             commands::view_fit,

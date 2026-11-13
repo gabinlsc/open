@@ -177,11 +177,14 @@ impl Canvas {
         let _ = self.tx.send(RenderMsg::Redraw);
     }
 
-    /// Image actuellement affichée, rendue à nouveau hors écran (le thread de rendu reste seul maître du GPU).
-    pub fn snapshot(&self) -> Result<crate::shell::render::Frame, String> {
+    /// Demande l'image actuellement affichée au thread de rendu (seul maître du GPU). La réponse arrive sur le
+    /// canal renvoyé : l'appelant l'attend **sans** tenir le verrou du canvas.
+    pub fn request_snapshot(
+        &self,
+    ) -> Result<std::sync::mpsc::Receiver<Result<crate::shell::render::Frame, String>>, String> {
         let (reply, rx) = std::sync::mpsc::channel();
         self.tx.send(RenderMsg::Snapshot(reply)).map_err(|e| e.to_string())?;
-        rx.recv_timeout(std::time::Duration::from_secs(2)).map_err(|e| e.to_string())?
+        Ok(rx)
     }
 
     pub fn shutdown(self) {

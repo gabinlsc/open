@@ -119,6 +119,8 @@ pub struct Renderer {
     size: (u32, u32),
     /// Format des pipelines (celui de la surface, ou RGBA sans fenêtre) : toute cible de rendu doit l'utiliser.
     format: wgpu::TextureFormat,
+    /// Dernière erreur GPU non capturée (validation, mémoire…) : remontée au lieu de faire planter le thread.
+    gpu_error: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     globals_buf: wgpu::Buffer,
     globals_nearest: wgpu::BindGroup,
     globals_linear: wgpu::BindGroup,
@@ -179,6 +181,15 @@ impl Renderer {
             adapter.request_device(&wgpu::DeviceDescriptor { label: Some("openpics"), ..Default::default() }),
         )
         .map_err(|e| GpuError::Device(e.to_string()))?;
+        // Par défaut wgpu panique sur une erreur de validation : le thread de rendu mourrait sans bruit et le canvas
+        // resterait vide. On garde l'erreur pour l'afficher.
+        let gpu_error = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
+        let sink = gpu_error.clone();
+        device.on_uncaptured_error(std::sync::Arc::new(move |e: wgpu::Error| {
+            if let Ok(mut slot) = sink.lock() {
+                slot.get_or_insert_with(|| e.to_string());
+            }
+        }));
 
         let surface_config = match &surface {
             Some(s) => {
@@ -374,6 +385,7 @@ impl Renderer {
             surface_config,
             size,
             format,
+            gpu_error,
             globals_buf,
             globals_nearest,
             globals_linear,
@@ -417,15 +429,24 @@ impl Renderer {
                 self.resize(w, h);
                 return Ok(());
             }
-            wgpu::CurrentSurfaceTexture::Timeout
-            | wgpu::CurrentSurfaceTexture::Occluded
-            | wgpu::CurrentSurfaceTexture::Validation => return Ok(()),
+            wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => return Ok(()),
+            wgpu::CurrentSurfaceTexture::Validation => {
+                return Err(GpuError::Surface(self.take_error().unwrap_or_else(|| "surface invalide".into())));
+            }
         };
         let view = texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let size = self.size;
         self.draw(frame, &view, size);
         self.queue.present(texture);
-        Ok(())
+        match self.take_error() {
+            Some(e) => Err(GpuError::Device(e)),
+            None => Ok(()),
+        }
+    }
+
+    /// Erreur GPU survenue depuis le dernier appel (au plus une, la première).
+    pub fn take_error(&self) -> Option<String> {
+        self.gpu_error.lock().ok().and_then(|mut slot| slot.take())
     }
 
     /// Rendu hors écran en RGBA 8 bits, lignes contiguës.

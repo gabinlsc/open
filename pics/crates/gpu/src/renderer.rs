@@ -976,6 +976,18 @@ fn build_lines(frame: &FrameParams<'_>, size: (u32, u32)) -> Vec<LineVertex> {
     line([r, b], [l, b], border);
     line([l, b], [l, t], border);
 
+    // Cadres des plans de travail (le plan actif est souligné par les repères d'édition de la session).
+    for a in &doc.artboards {
+        let p0 = vp.doc_to_screen(openpics_core::Vec2::new(f64::from(a.x), f64::from(a.y)));
+        let p1 = vp.doc_to_screen(openpics_core::Vec2::new(f64::from(a.x + a.w), f64::from(a.y + a.h)));
+        let (x0, y0, x1, y1) = (px(p0.x), px(p0.y), px(p1.x), px(p1.y));
+        let color = [0.40, 0.45, 0.55, 0.95];
+        line([x0, y0], [x1, y0], color);
+        line([x1, y0], [x1, y1], color);
+        line([x1, y1], [x0, y1], color);
+        line([x0, y1], [x0, y0], color);
+    }
+
     if let Some(ov) = frame.overlay {
         let blue = [0.141, 0.278, 0.839, 1.0];
         let white = [1.0, 1.0, 1.0, 1.0];
@@ -1168,6 +1180,34 @@ mod tests {
         assert!(blue(pixel(&drawn, 100, 14, 46)), "carré extérieur du point : bleu");
         assert!(!blue(pixel(&plain, 100, 60, 50)), "sans repères, pas de tracé");
         assert_eq!(pixel(&drawn, 100, 30, 80), pixel(&plain, 100, 30, 80), "loin des repères, l'image est inchangée");
+    }
+
+    #[test]
+    fn artboard_frames_are_drawn() {
+        let Some(mut r) = headless() else { return };
+        let mut doc = Document::new(DocId(1), "t", Size::new(100, 100)).unwrap();
+        for y in 0..100 {
+            for x in 0..100 {
+                doc.layers[0].pixels.put_pixel(x, y, [255, 255, 255, 255]);
+            }
+        }
+        fn frame(d: &Document) -> FrameParams<'_> {
+            FrameParams {
+                document: Some(d),
+                viewport: Viewport { zoom: 1.0, origin: Vec2::default() },
+                settings: ViewSettings { show_grid: false, show_guides: false, ..ViewSettings::default() },
+                theme: Theme::Light,
+                preview_guide: None,
+                selection: None,
+                overlay: None,
+            }
+        }
+        let before = r.render_to_rgba8(&frame(&doc), (100, 100)).unwrap();
+        doc.artboards.push(openpics_core::Artboard { id: 9, name: "A".into(), x: 10, y: 10, w: 40, h: 30 });
+        let after = r.render_to_rgba8(&frame(&doc), (100, 100)).unwrap();
+        assert_eq!(pixel(&before, 100, 30, 10), [255, 255, 255, 255]);
+        assert!(pixel(&after, 100, 30, 10)[0] < 150, "bord haut du plan dessiné : {:?}", pixel(&after, 100, 30, 10));
+        assert_eq!(pixel(&after, 100, 30, 25), [255, 255, 255, 255], "l'intérieur du plan n'est pas peint");
     }
 
     #[test]

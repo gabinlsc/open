@@ -23,6 +23,7 @@ import type { StyleDto } from "./gen/StyleDto";
 import type { Snapshot } from "./gen/Snapshot";
 import type { ThemeChoice } from "./gen/ThemeChoice";
 import type { TransformDto } from "./gen/TransformDto";
+import type { ArtboardDto } from "./gen/ArtboardDto";
 import type { BatchReport } from "./gen/BatchReport";
 import type { RecoveryDto } from "./gen/RecoveryDto";
 import type { ModelDto } from "./gen/ModelDto";
@@ -31,7 +32,7 @@ import type { TextDto } from "./gen/TextDto";
 import type { Tool } from "./gen/Tool";
 import type { ToolOptionsDto } from "./gen/ToolOptionsDto";
 
-export type { BatchReport, RecoveryDto, ModelDto, ShapeDto, TextDto, FilterInfoDto, AdjustmentDto, AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, PaintOptionsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
+export type { ArtboardDto, BatchReport, RecoveryDto, ModelDto, ShapeDto, TextDto, FilterInfoDto, AdjustmentDto, AppStatus, ApiError, AxisDto, BlendInfo, CursorEvent, ImageOp, KeymapDto, LayerDto, LayerPropsDto, PaintOptionsDto, SettingsDto, Snapshot, StyleDto, ThemeChoice, Tool, ToolOptionsDto, TransformDto, ResolvedTheme };
 
 /** Erreur typée côté TS : `code` est stable, `message` est affichable tel quel. */
 export class CommandError extends Error {
@@ -67,6 +68,11 @@ export const api = {
   docActivate: (id: number) => call<Snapshot>("doc_activate", { id }),
   setCanvas: (rect: CanvasRect) => call<Snapshot>("view_set_canvas", { rect }),
   setCanvasVisible: (visible: boolean) => call<void>("view_set_canvas_visible", { visible }),
+  artboardAdd: (x: number, y: number, w: number, h: number, name: string | null) => call<Snapshot>("artboard_add", { x, y, w, h, name }),
+  artboardSet: (a: ArtboardDto) => call<Snapshot>("artboard_set", { id: a.id, name: a.name, x: a.x, y: a.y, w: a.w, h: a.h }),
+  artboardRemove: (id: number) => call<Snapshot>("artboard_remove", { id }),
+  artboardSelect: (id: number | null) => call<Snapshot>("artboard_select", { id }),
+  artboardsExport: (path: string, scales: number[], jpegQuality: number | null) => call<string[]>("artboards_export", { path, scales, jpegQuality }),
   nodeDelete: () => call<Snapshot>("node_delete"),
   canvasSnapshot: () => call<ArrayBuffer>("view_canvas_snapshot"),
   zoom: (zoomIn: boolean) => call<Snapshot>("view_zoom", { zoomIn, anchorX: null, anchorY: null }),

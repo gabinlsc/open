@@ -21,7 +21,7 @@ pub mod vector;
 pub mod view;
 
 pub use blend::BlendMode;
-pub use document::{Axis, DocId, Document, Guide, Layer, LayerId, LayerKind, LayerProps, Locks, Mask};
+pub use document::{Artboard, Axis, DocId, Document, Guide, Layer, LayerId, LayerKind, LayerProps, Locks, Mask};
 pub use error::CoreError;
 pub use geom::{IRect, Size, Vec2};
 pub use styles::LayerStyle;

@@ -129,6 +129,12 @@ export const ACTIONS: Record<string, ActionDef> = {
   "app.palette": { label: "Palette de commandes…", run: () => st().setDialog({ kind: "palette" }) },
   "file.batch": { label: "Traitement par lot…", run: () => st().setDialog({ kind: "batch" }) },
   "image.resize": { label: "Taille de l'image…", run: () => st().setDialog({ kind: "resize" }), enabled: hasDoc },
+  "file.export_artboards": {
+    label: "Exporter les plans de travail…",
+    run: () => st().setDialog({ kind: "exportScales", artboards: true }),
+    enabled: () => (st().snapshot?.artboards.length ?? 0) > 0,
+  },
+  "tool.artboard": { label: "Plan de travail", run: () => void st().run(() => api.setTool("artboard")) },
   "file.export_scales": { label: "Exporter à plusieurs échelles…", run: () => st().setDialog({ kind: "exportScales" }), enabled: hasDoc },
   "view.compare": { label: "Comparer avec l'original", run: () => void st().run(() => api.compareSet(!st().snapshot?.comparing)), enabled: hasDoc },
   "tools.scripts": { label: "Scripts et actions…", run: () => st().setDialog({ kind: "scripts" }) },

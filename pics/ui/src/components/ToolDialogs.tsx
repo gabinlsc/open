@@ -49,10 +49,10 @@ export function ResizeDialog() {
 const SCALES = [0.5, 1, 2, 3, 4];
 
 /** Exporte nom@1x.png, nom@2x.png… en une fois. */
-export function ExportScalesDialog() {
+export function ExportScalesDialog({ artboards }: { artboards: boolean }) {
   const doc = useStore(activeDoc);
   const [ext, setExt] = useState("png");
-  const [chosen, setChosen] = useState<number[]>([1, 2]);
+  const [chosen, setChosen] = useState<number[]>(artboards ? [1] : [1, 2]);
   const [busy, setBusy] = useState(false);
   const toggle = (s: number) => setChosen((c) => (c.includes(s) ? c.filter((x) => x !== s) : [...c, s].sort((a, b) => a - b)));
   const submit = async (e: React.FormEvent) => {
@@ -61,7 +61,7 @@ export function ExportScalesDialog() {
     if (!path) return;
     setBusy(true);
     try {
-      const files = await api.exportScales(path, chosen, ext === "jpg" ? 90 : null);
+      const files = await (artboards ? api.artboardsExport : api.exportScales)(path, chosen, ext === "jpg" ? 90 : null);
       useStore.getState().notify({ kind: "info", text: `${files.length} ${tr("fichier(s) exporté(s).")}` });
       close();
     } catch (err) {
@@ -70,7 +70,7 @@ export function ExportScalesDialog() {
     }
   };
   return (
-    <Modal title={tr("Exporter à plusieurs échelles")} onClose={close}>
+    <Modal title={tr(artboards ? "Exporter les plans de travail" : "Exporter à plusieurs échelles")} onClose={close}>
       <form onSubmit={submit} className="form">
         <fieldset className="checks">
           <legend>{tr("Échelles")}</legend>
@@ -86,7 +86,11 @@ export function ExportScalesDialog() {
             <option value="webp">WebP</option>
           </select>
         </label>
-        <p className="muted">{tr("Les fichiers sont nommés ")}<code>{tr("nom@2x.png")}</code>, <code>{tr("nom@0.5x.png")}</code>{tr("… à côté du fichier choisi.")}</p>
+        {artboards ? (
+          <p className="muted">{tr("Un fichier par plan de travail, nommé ")}<code>{tr("nom-plan.png")}</code>{tr(" (ou ")}<code>{tr("nom-plan@2x.png")}</code>{tr(" avec plusieurs échelles), à côté du fichier choisi.")}</p>
+        ) : (
+          <p className="muted">{tr("Les fichiers sont nommés ")}<code>{tr("nom@2x.png")}</code>, <code>{tr("nom@0.5x.png")}</code>{tr("… à côté du fichier choisi.")}</p>
+        )}
         <div className="actions">
           <button type="button" className="btn secondary" onClick={close}>{tr("Annuler")}</button>
           <button type="submit" className="btn" disabled={busy || chosen.length === 0}>{busy ? "Export…" : "Exporter…"}</button>

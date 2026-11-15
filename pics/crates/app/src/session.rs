@@ -41,6 +41,7 @@ struct DocEntry {
 }
 
 mod ai;
+mod artboards;
 mod filters;
 mod image;
 mod paint;
@@ -68,6 +69,9 @@ pub struct Session {
     node_drag: Option<vector::NodeDrag>,
     /// Point sélectionné avec la Sélection directe (calque, chemin, point) : cible de Suppr.
     node_selected: Option<(LayerId, usize, usize)>,
+    /// Glissé en cours de l'outil Plan de travail (point de départ, coordonnées document).
+    artboard_drag: Option<(f64, f64)>,
+    active_artboard: Option<u64>,
     shape_drag: Option<((f64, f64), bool)>,
     /// Source du tampon et du correcteur (Alt + clic) et décalage source − destination une fois fixé.
     clone_source: Option<(f64, f64)>,
@@ -114,6 +118,8 @@ impl Session {
             pen: None,
             node_drag: None,
             node_selected: None,
+            artboard_drag: None,
+            active_artboard: None,
             shape_drag: None,
             clone_source: None,
             clone_offset: None,
@@ -759,7 +765,7 @@ impl Session {
                 .selection_preview
                 .clone()
                 .or_else(|| self.entry().ok().and_then(|e| e.doc.selection.clone())),
-            overlay: self.node_overlay(),
+            overlay: self.node_overlay().or_else(|| self.artboard_overlay()),
         }
     }
 
@@ -823,6 +829,11 @@ impl Session {
             settings: SettingsDto::from(self.settings),
             tool: self.tool,
             comparing: self.entry().is_ok_and(|e| e.doc.is_comparing()),
+            artboards: self
+                .entry()
+                .map(|e| e.doc.artboards.iter().map(crate::dto::ArtboardDto::from).collect())
+                .unwrap_or_default(),
+            active_artboard_id: self.active_artboard_checked(),
         }
     }
 }

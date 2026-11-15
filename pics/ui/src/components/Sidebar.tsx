@@ -1,6 +1,7 @@
 import { t as tr } from "../i18n";
 import { api } from "../api";
 import { activeDoc, useStore } from "../store";
+import { ArtboardPanel } from "./ArtboardPanel";
 import { FilterPanel } from "./FilterPanel";
 import { LayerPanel } from "./LayerPanel";
 import { PaintOptions } from "./PaintOptions";
@@ -31,6 +32,7 @@ export function Sidebar() {
       <ToolOptions />
       <PaintOptions />
       <LayerPanel />
+      <ArtboardPanel />
       <section aria-labelledby="p-hist">
         <h3 id="p-hist">{tr("Historique")}</h3>
         {history.names.length === 0 ? (

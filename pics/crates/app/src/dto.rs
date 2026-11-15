@@ -69,6 +69,7 @@ pub enum Tool {
     ShapeLine,
     Pen,
     DirectSelect,
+    Artboard,
 }
 
 /// Réglages des outils de sélection.
@@ -239,6 +240,10 @@ pub struct Snapshot {
     pub tool: Tool,
     /// Le document affiché est son original (comparaison avant/après) : il est gelé.
     pub comparing: bool,
+    /// Plans de travail du document actif.
+    pub artboards: Vec<ArtboardDto>,
+    #[ts(type = "number | null")]
+    pub active_artboard_id: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, TS)]
@@ -1006,4 +1011,24 @@ pub struct ModelDto {
     pub installed: bool,
     /// Sait isoler un sujet (suppression d'arrière-plan ou sélection du sujet).
     pub isolates_subject: bool,
+}
+
+/// Plan de travail (zone exportée à part).
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ArtboardDto {
+    #[ts(type = "number")]
+    pub id: u64,
+    pub name: String,
+    pub x: u32,
+    pub y: u32,
+    pub w: u32,
+    pub h: u32,
+}
+
+impl From<&openpics_core::Artboard> for ArtboardDto {
+    fn from(a: &openpics_core::Artboard) -> Self {
+        ArtboardDto { id: a.id, name: a.name.clone(), x: a.x, y: a.y, w: a.w, h: a.h }
+    }
 }

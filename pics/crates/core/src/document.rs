@@ -33,6 +33,37 @@ pub struct Guide {
     pub position: f64,
 }
 
+/// Plan de travail : une zone nommée du document, exportée comme une image à part (formats multiples dans un même
+/// document). Les calques sont partagés : ce n'est pas une page indépendante.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Artboard {
+    pub id: u64,
+    pub name: String,
+    pub x: u32,
+    pub y: u32,
+    pub w: u32,
+    pub h: u32,
+}
+
+/// Nombre maximal de plans de travail et longueur maximale d'un nom (fichier piégé, saisie hostile).
+pub const MAX_ARTBOARDS: usize = 256;
+pub const MAX_ARTBOARD_NAME: usize = 120;
+
+impl Artboard {
+    /// Ramené dans le document ; `None` s'il n'en reste rien.
+    pub fn clamped(mut self, size: Size) -> Option<Artboard> {
+        self.x = self.x.min(size.width);
+        self.y = self.y.min(size.height);
+        self.w = self.w.min(size.width - self.x);
+        self.h = self.h.min(size.height - self.y);
+        self.name = self.name.chars().filter(|c| !c.is_control()).take(MAX_ARTBOARD_NAME).collect();
+        if self.name.trim().is_empty() {
+            self.name = "Plan de travail".into();
+        }
+        (self.w > 0 && self.h > 0).then_some(self)
+    }
+}
+
 /// Verrous d'un calque. `all` interdit toute modification ; `pixels` interdit de peindre ;
 /// `position` interdit de déplacer ou transformer (appliqué par les outils de transformation).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -225,6 +256,7 @@ pub struct Document {
     size: Size,
     pub layers: Vec<Layer>,
     pub guides: Vec<Guide>,
+    pub artboards: Vec<Artboard>,
     /// Sélection active (masque 0..255) ; `None` = tout est modifiable.
     pub selection: Option<TileGrid>,
     history: History,
@@ -245,6 +277,7 @@ impl Document {
             size,
             layers: Vec::new(),
             guides: Vec::new(),
+            artboards: Vec::new(),
             selection: None,
             history: History::default(),
             revision: 0,
@@ -341,6 +374,7 @@ impl Document {
             size: self.size,
             layers: self.layers.clone(),
             guides: self.guides.clone(),
+            artboards: self.artboards.clone(),
             selection: self.selection.clone(),
             history: History::default(),
             revision: self.revision,
@@ -525,7 +559,7 @@ mod tests {
         let layer = Layer::new(LayerId(1), "L", TileGrid::new(bigger.width, bigger.height).unwrap());
         d.execute(Box::new(ReplaceDocState::new(
             "Taille",
-            DocState { size: bigger, layers: vec![layer], guides: vec![], selection: None },
+            DocState { size: bigger, layers: vec![layer], guides: vec![], artboards: vec![], selection: None },
         )))
         .unwrap();
         assert_eq!(d.size(), bigger);

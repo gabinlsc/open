@@ -491,7 +491,35 @@ impl Session {
                 }
             }
         }
-        let Some((path, anchor, part)) = hit else { return Ok(()) };
+        let Some((path, anchor, part)) = hit else {
+            self.node_selected = None;
+            // Clic sur le tracé lui-même : on y ajoute un point, sans changer la forme.
+            let best = model
+                .paths
+                .iter()
+                .enumerate()
+                .filter_map(|(pi, path)| path.nearest(at).map(|(seg, t, d)| (pi, seg, t, d)))
+                .min_by(|a, b| a.3.total_cmp(&b.3));
+            if let Some((pi, seg, t, d)) = best {
+                if d * zoom <= NODE_HIT_PX {
+                    let mut m = model;
+                    if let Some(idx) = m.paths[pi].insert_at(seg, t) {
+                        let pixels = self.raster_for(&m)?;
+                        self.entry_mut()?.doc.execute(Box::new(SetLayerContent::new(
+                            "Ajouter un point",
+                            layer,
+                            LayerKind::Shape(Box::new(m)),
+                            pixels,
+                        )))?;
+                        self.node_selected = Some((layer, pi, idx));
+                    }
+                }
+            }
+            return Ok(());
+        };
+        if part == NodePart::Anchor {
+            self.node_selected = Some((layer, path, anchor));
+        }
         if p.alt && part == NodePart::Anchor {
             let mut m = model;
             let a = &mut m.paths[path].anchors[anchor];
@@ -564,6 +592,37 @@ impl Session {
         Ok(())
     }
 
+    /// Supprime le point sélectionné (Suppr). Un chemin garde au moins 2 points (3 s'il est fermé).
+    pub fn node_delete(&mut self) -> Result<bool, SessionError> {
+        let Some((layer, pi, ai)) = self.node_selected else { return Ok(false) };
+        let Some((active, mut m)) = self.active_shape() else { return Ok(false) };
+        if active != layer || self.tool != Tool::DirectSelect {
+            self.node_selected = None;
+            return Ok(false);
+        }
+        let Some(path) = m.paths.get_mut(pi).filter(|p| ai < p.anchors.len()) else {
+            self.node_selected = None;
+            return Ok(false);
+        };
+        if path.anchors.len() <= path.min_anchors() {
+            return Err(SessionError::InvalidArgument(format!(
+                "un tracé {} garde au moins {} points",
+                if path.closed { "fermé" } else { "ouvert" },
+                path.min_anchors()
+            )));
+        }
+        path.anchors.remove(ai);
+        let pixels = self.raster_for(&m)?;
+        self.entry_mut()?.doc.execute(Box::new(SetLayerContent::new(
+            "Supprimer un point",
+            layer,
+            LayerKind::Shape(Box::new(m)),
+            pixels,
+        )))?;
+        self.node_selected = None;
+        Ok(true)
+    }
+
     /// Repères à dessiner : tracé de la forme active, bras des poignées, points ; seulement avec la Sélection directe.
     pub(super) fn node_overlay(&self) -> Option<openpics_core::EditOverlay> {
         if self.tool != Tool::DirectSelect {
@@ -598,6 +657,10 @@ impl Session {
                     NodePart::In => add(a.pos, a.h_in),
                     NodePart::Out => add(a.pos, a.h_out),
                 });
+            }
+        } else if let Some((layer, pi, ai)) = self.node_selected {
+            if Some(layer) == self.entry().ok().and_then(|e| e.active_layer) {
+                ov.selected = model.paths.get(pi).and_then(|p| p.anchors.get(ai)).map(|a| a.pos);
             }
         }
         Some(ov)
@@ -678,6 +741,44 @@ mod tests {
         s.tool_cancel();
         assert_eq!(anchors_of(&s, id)[0].pos, (20.0, 20.0));
         assert_eq!(s.snapshot().history.position, n);
+    }
+
+    #[test]
+    fn clicking_the_path_adds_a_point_and_delete_removes_the_selected_one() {
+        let mut s = session();
+        s.set_tool(Tool::ShapeRect);
+        drag(&mut s, (20.0, 20.0), (80.0, 60.0));
+        let id = s.snapshot().active_layer_id.unwrap();
+        s.set_tool(Tool::DirectSelect);
+        assert!(!s.node_delete().unwrap(), "rien de sélectionné : rien à supprimer");
+        // Clic sur le bord haut, entre deux coins : un point est ajouté, la forme ne change pas.
+        let px_before = layer_px(&s, id, 50, 40);
+        s.pointer_down(&at(50.0, 20.0)).unwrap();
+        s.pointer_up(&at(50.0, 20.0)).unwrap();
+        let a = anchors_of(&s, id);
+        assert_eq!(a.len(), 5);
+        assert!((a[1].pos.0 - 50.0).abs() < 1e-6 && (a[1].pos.1 - 20.0).abs() < 1e-6, "{:?}", a[1].pos);
+        assert_eq!(layer_px(&s, id, 50, 40), px_before);
+        assert_eq!(s.snapshot().history.names.last().unwrap(), "Ajouter un point");
+        assert!(s.render_state().overlay.unwrap().selected.is_some(), "le nouveau point est sélectionné");
+        // Le nouveau point se déplace comme les autres, puis Suppr le retire.
+        drag(&mut s, (50.0, 20.0), (50.0, 5.0));
+        assert_eq!(anchors_of(&s, id)[1].pos, (50.0, 5.0));
+        assert!(s.node_delete().unwrap());
+        assert_eq!(anchors_of(&s, id).len(), 4);
+        assert_eq!(s.snapshot().history.names.last().unwrap(), "Supprimer un point");
+        // Un rectangle (fermé) garde au moins 3 points.
+        s.pointer_down(&at(20.0, 20.0)).unwrap();
+        s.pointer_up(&at(20.0, 20.0)).unwrap();
+        assert!(s.node_delete().unwrap());
+        s.pointer_down(&at(80.0, 20.0)).unwrap();
+        s.pointer_up(&at(80.0, 20.0)).unwrap();
+        let err = s.node_delete().unwrap_err().to_string();
+        assert!(err.contains("au moins 3"), "{err}");
+        // Un clic dans le vide désélectionne.
+        s.pointer_down(&at(150.0, 90.0)).unwrap();
+        s.pointer_up(&at(150.0, 90.0)).unwrap();
+        assert!(s.render_state().overlay.unwrap().selected.is_none());
     }
 
     #[test]

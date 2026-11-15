@@ -647,3 +647,8 @@ pub async fn folder_images(dir: String) -> ApiResult<Vec<String>> {
     let files = crate::batch::list_images(std::path::Path::new(&dir))?;
     Ok(files.into_iter().map(|f| f.display().to_string()).collect())
 }
+
+#[tauri::command]
+pub fn node_delete(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.node_delete().map(|_| ()))
+}

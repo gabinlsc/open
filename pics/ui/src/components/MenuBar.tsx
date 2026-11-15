@@ -25,7 +25,7 @@ export function MenuBar() {
     void api.setTheme(choice, applyTheme(choice));
   };
 
-  const filterItems: Item[] = (snapshot?.filters ?? []).map((f) => ({ label: `${f.category} › ${f.label}…`, onSelect: () => void startFilter(f.id) }));
+  const filterItems: Item[] = (snapshot?.filters ?? []).map((f) => ({ label: `${t(f.category)} › ${t(f.label)}…`, onSelect: () => void startFilter(f.id) }));
   const adjustmentKinds = snapshot?.adjustmentKinds ?? [];
   const hasDoc = (snapshot?.docs.length ?? 0) > 0;
   const menus: { label: string; items: Item[] }[] = [
@@ -58,7 +58,7 @@ export function MenuBar() {
         { action: "layer.mask_reveal" },
         { action: "layer.mask_hide" },
         { action: "layer.rasterize" },
-        ...(hasDoc ? [{ sep: true } as Item, ...adjustmentKinds.map((k): Item => ({ label: `Réglage : ${k.label}`, onSelect: () => void useStore.getState().run(() => api.adjustmentAdd(k.id)) }))] : []),
+        ...(hasDoc ? [{ sep: true } as Item, ...adjustmentKinds.map((k): Item => ({ label: `${t("Réglage :")} ${t(k.label)}`, onSelect: () => void useStore.getState().run(() => api.adjustmentAdd(k.id)) }))] : []),
       ],
     },
     {
@@ -139,7 +139,7 @@ export function MenuBar() {
   };
 
   return (
-    <div className="menubar" role="menubar" aria-label="Menu principal" ref={barRef} onKeyDown={onBarKey}>
+    <div className="menubar" role="menubar" aria-label={t("Menu principal")} ref={barRef} onKeyDown={onBarKey}>
       {menus.map((menu, i) => (
         <div key={menu.label} className="menu" data-menu={i}>
           <button
@@ -159,7 +159,7 @@ export function MenuBar() {
                 if ("sep" in item) return <hr key={k} role="separator" />;
                 const isAction = "action" in item;
                 const def = isAction ? ACTIONS[item.action] : undefined;
-                const label = t(isAction ? (def?.label ?? item.action) : item.label);
+                const label = isAction ? t(def?.label ?? item.action, "action") : t(item.label);
                 const disabled = isAction ? def?.enabled?.() === false : false;
                 const chord = isAction ? keymap[item.action]?.[0] : undefined;
                 const checked = item.checked;

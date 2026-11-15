@@ -1,3 +1,4 @@
+import { t as tr } from "../i18n";
 import { useEffect, useState } from "react";
 import { api, type BlendInfo, type LayerDto, type StyleDto } from "../api";
 import { useStore } from "../store";
@@ -32,47 +33,47 @@ function Color({ label, value, onChange }: { label: string; value: string; onCha
 function Blend({ value, modes, onChange }: { value: string; modes: BlendInfo[]; onChange: (v: string) => void }) {
   return (
     <label className="num wide">
-      <span>Mode</span>
+      <span>{tr("Mode")}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)}>
-        {modes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+        {modes.map((m) => <option key={m.id} value={m.id}>{tr(m.label)}</option>)}
       </select>
     </label>
   );
 }
 
 function Editor({ style, modes, onChange }: { style: StyleDto; modes: BlendInfo[]; onChange: (s: StyleDto) => void }) {
-  const opacity = <Num label="Opacité %" value={Math.round(style.opacity * 100)} min={0} max={100} onCommit={(v) => onChange({ ...style, opacity: v / 100 })} />;
+  const opacity = <Num label={tr("Opacité %")} value={Math.round(style.opacity * 100)} min={0} max={100} onCommit={(v) => onChange({ ...style, opacity: v / 100 })} />;
   switch (style.kind) {
     case "drop_shadow":
       return (
         <div className="style-fields">
-          <Color label="Couleur" value={style.color} onChange={(color) => onChange({ ...style, color })} />
+          <Color label={tr("Couleur")} value={style.color} onChange={(color) => onChange({ ...style, color })} />
           {opacity}
-          <Num label="Angle °" value={style.angleDeg} min={-360} max={360} onCommit={(angleDeg) => onChange({ ...style, angleDeg })} />
-          <Num label="Distance" value={style.distance} min={0} max={500} onCommit={(distance) => onChange({ ...style, distance })} />
-          <Num label="Flou" value={style.size} min={0} max={250} onCommit={(size) => onChange({ ...style, size })} />
+          <Num label={tr("Angle °")} value={style.angleDeg} min={-360} max={360} onCommit={(angleDeg) => onChange({ ...style, angleDeg })} />
+          <Num label={tr("Distance")} value={style.distance} min={0} max={500} onCommit={(distance) => onChange({ ...style, distance })} />
+          <Num label={tr("Flou")} value={style.size} min={0} max={250} onCommit={(size) => onChange({ ...style, size })} />
         </div>
       );
     case "outer_glow":
       return (
         <div className="style-fields">
-          <Color label="Couleur" value={style.color} onChange={(color) => onChange({ ...style, color })} />
+          <Color label={tr("Couleur")} value={style.color} onChange={(color) => onChange({ ...style, color })} />
           {opacity}
-          <Num label="Taille" value={style.size} min={0} max={250} onCommit={(size) => onChange({ ...style, size })} />
+          <Num label={tr("Taille")} value={style.size} min={0} max={250} onCommit={(size) => onChange({ ...style, size })} />
         </div>
       );
     case "stroke":
       return (
         <div className="style-fields">
-          <Color label="Couleur" value={style.color} onChange={(color) => onChange({ ...style, color })} />
+          <Color label={tr("Couleur")} value={style.color} onChange={(color) => onChange({ ...style, color })} />
           {opacity}
-          <Num label="Épaisseur" value={style.size} min={0} max={250} onCommit={(size) => onChange({ ...style, size })} />
+          <Num label={tr("Épaisseur")} value={style.size} min={0} max={250} onCommit={(size) => onChange({ ...style, size })} />
           <label className="num wide">
-            <span>Position</span>
+            <span>{tr("Position")}</span>
             <select value={style.position} onChange={(e) => onChange({ ...style, position: e.target.value as typeof style.position })}>
-              <option value="outside">Extérieur</option>
-              <option value="center">Centré</option>
-              <option value="inside">Intérieur</option>
+              <option value="outside">{tr("Extérieur")}</option>
+              <option value="center">{tr("Centré")}</option>
+              <option value="inside">{tr("Intérieur")}</option>
             </select>
           </label>
         </div>
@@ -80,7 +81,7 @@ function Editor({ style, modes, onChange }: { style: StyleDto; modes: BlendInfo[
     case "color_overlay":
       return (
         <div className="style-fields">
-          <Color label="Couleur" value={style.color} onChange={(color) => onChange({ ...style, color })} />
+          <Color label={tr("Couleur")} value={style.color} onChange={(color) => onChange({ ...style, color })} />
           {opacity}
           <Blend value={style.blend} modes={modes} onChange={(blend) => onChange({ ...style, blend })} />
         </div>
@@ -88,10 +89,10 @@ function Editor({ style, modes, onChange }: { style: StyleDto; modes: BlendInfo[
     case "gradient_overlay":
       return (
         <div className="style-fields">
-          <Color label="Début" value={style.from} onChange={(from) => onChange({ ...style, from })} />
-          <Color label="Fin" value={style.to} onChange={(to) => onChange({ ...style, to })} />
+          <Color label={tr("Début")} value={style.from} onChange={(from) => onChange({ ...style, from })} />
+          <Color label={tr("Fin")} value={style.to} onChange={(to) => onChange({ ...style, to })} />
           {opacity}
-          <Num label="Angle °" value={style.angleDeg} min={-360} max={360} onCommit={(angleDeg) => onChange({ ...style, angleDeg })} />
+          <Num label={tr("Angle °")} value={style.angleDeg} min={-360} max={360} onCommit={(angleDeg) => onChange({ ...style, angleDeg })} />
           <Blend value={style.blend} modes={modes} onChange={(blend) => onChange({ ...style, blend })} />
         </div>
       );
@@ -104,13 +105,13 @@ export function StylePanel({ layer }: { layer: LayerDto }) {
   const set = (styles: StyleDto[]) => void run(() => api.layerSetStyles(layer.id, styles));
   return (
     <fieldset className="checks styles">
-      <legend>Styles de calque</legend>
+      <legend>{tr("Styles de calque")}</legend>
       {STYLE_KINDS.map(({ kind, label }) => {
         const style = layer.styles.find((s) => s.kind === kind);
         return (
           <div key={kind} className="style-row">
             <label>
-              <input type="checkbox" checked={style !== undefined} onChange={(e) => set(toggleStyle(layer.styles, kind, e.target.checked))} /> {label}
+              <input type="checkbox" checked={style !== undefined} onChange={(e) => set(toggleStyle(layer.styles, kind, e.target.checked))} /> {tr(label)}
             </label>
             {style && <Editor style={style} modes={modes} onChange={(next) => set(replaceStyle(layer.styles, next))} />}
           </div>

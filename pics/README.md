@@ -8,11 +8,11 @@
 - **Réglages** (non destructifs) : 15 types dont courbes, niveaux, LUT 3D `.cube`, correspondance de couleurs. **Filtres** : 21, avec aperçu en direct.
 - **Texte et vectoriel** : texte éditable (paragraphe, sur tracé), formes, plume, sélection directe (édition des points et poignées), opérations booléennes, SVG (import raster, export vectoriel).
 - **IA locale** : sélection du sujet et suppression d'arrière-plan par modèle ONNX (à fournir) ou méthode classique ; comblement par diffusion.
-- **Productivité** : palette Ctrl+K, scripts (Rhai) et enregistreur d'actions, traitement par lot, taille d'image (Lanczos), export multi-échelles, comparaison avec l'original, explorateur de dossier, interface FR/EN (menus et outils).
+- **Productivité** : palette Ctrl+K, scripts (Rhai) et enregistreur d'actions, traitement par lot, taille d'image (Lanczos), export multi-échelles, comparaison avec l'original, explorateur de dossier, interface FR/EN.
 - **Formats** : PNG, JPEG, WebP, TIFF, BMP, GIF, et `.ocv` natif (calques, masques, texte et formes éditables).
 
 ## Limites connues (honnêtes)
-Voir `docs/PHASE9.md`. En bref : pas de plans de travail multiples, pas de modèles génératifs (remplissage, super-résolution, colorisation), dialogues non traduits en anglais, ONNX Runtime à fournir soi-même, application jamais exécutée sur un Windows réel pendant le développement (compilée et éditée de liens seulement).
+Voir `docs/PHASE9.md`. En bref : pas de plans de travail multiples, pas de modèles génératifs (remplissage, super-résolution, colorisation), messages d'erreur et historique en français uniquement, ONNX Runtime à fournir soi-même, application jamais exécutée sur un Windows réel pendant le développement (compilée et éditée de liens seulement).
 
 ## Construire
 ```bash

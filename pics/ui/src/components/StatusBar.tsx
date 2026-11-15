@@ -1,3 +1,4 @@
+import { t as tr } from "../i18n";
 import { api } from "../api";
 import { activeDoc, useStore } from "../store";
 
@@ -16,7 +17,7 @@ export function StatusBar() {
       {doc ? (
         <>
           <label className="zoom-select">
-            Zoom
+            {tr("Zoom")}
             <select
               value={PRESETS.includes(zoom) ? String(zoom) : "custom"}
               onChange={(e) => e.target.value !== "custom" && void run(() => api.zoomTo(Number(e.target.value)))}
@@ -31,7 +32,7 @@ export function StatusBar() {
           {cursor?.inside && <span>X {Math.floor(cursor.x)} · Y {Math.floor(cursor.y)}</span>}
         </>
       ) : (
-        <span>Aucun document</span>
+        <span>{tr("Aucun document")}</span>
       )}
       <span className="spacer" />
       <span className="muted">OpenPics {version}</span>

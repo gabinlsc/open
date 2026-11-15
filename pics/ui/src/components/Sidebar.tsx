@@ -1,3 +1,4 @@
+import { t as tr } from "../i18n";
 import { api } from "../api";
 import { activeDoc, useStore } from "../store";
 import { FilterPanel } from "./FilterPanel";
@@ -12,18 +13,18 @@ export function Sidebar() {
   if (!snapshot) return <aside className="sidebar" />;
   const { history, guides } = snapshot;
   return (
-    <aside className="sidebar" aria-label="Panneaux">
+    <aside className="sidebar" aria-label={tr("Panneaux")}>
       <section aria-labelledby="p-info">
-        <h3 id="p-info">Informations</h3>
+        <h3 id="p-info">{tr("Informations")}</h3>
         {doc ? (
           <dl className="info">
-            <dt>Nom</dt><dd>{doc.name}</dd>
-            <dt>Taille</dt><dd>{doc.width} × {doc.height} px</dd>
-            <dt>Zoom</dt><dd>{Math.round(snapshot.view.zoom * 1000) / 10} %</dd>
-            <dt>Fichier</dt><dd className="path">{doc.path ?? "Non enregistré"}</dd>
+            <dt>{tr("Nom")}</dt><dd>{doc.name}</dd>
+            <dt>{tr("Taille")}</dt><dd>{doc.width} × {doc.height} px</dd>
+            <dt>{tr("Zoom")}</dt><dd>{Math.round(snapshot.view.zoom * 1000) / 10} %</dd>
+            <dt>{tr("Fichier")}</dt><dd className="path">{doc.path ?? tr("Non enregistré")}</dd>
           </dl>
         ) : (
-          <p className="muted">Aucun document.</p>
+          <p className="muted">{tr("Aucun document.")}</p>
         )}
       </section>
       <FilterPanel />
@@ -31,9 +32,9 @@ export function Sidebar() {
       <PaintOptions />
       <LayerPanel />
       <section aria-labelledby="p-hist">
-        <h3 id="p-hist">Historique</h3>
+        <h3 id="p-hist">{tr("Historique")}</h3>
         {history.names.length === 0 ? (
-          <p className="muted">Aucune action.</p>
+          <p className="muted">{tr("Aucune action.")}</p>
         ) : (
           <ol className="history">
             {history.names.map((name, i) => (
@@ -44,14 +45,14 @@ export function Sidebar() {
           </ol>
         )}
         <div className="row">
-          <button className="btn small secondary" disabled={!snapshot.canUndo} onClick={() => void run(api.undo)}>Annuler</button>
-          <button className="btn small secondary" disabled={!snapshot.canRedo} onClick={() => void run(api.redo)}>Rétablir</button>
+          <button className="btn small secondary" disabled={!snapshot.canUndo} onClick={() => void run(api.undo)}>{tr("Annuler", "action")}</button>
+          <button className="btn small secondary" disabled={!snapshot.canRedo} onClick={() => void run(api.redo)}>{tr("Rétablir")}</button>
         </div>
       </section>
       <section aria-labelledby="p-guides">
-        <h3 id="p-guides">Repères</h3>
+        <h3 id="p-guides">{tr("Repères")}</h3>
         {guides.length === 0 ? (
-          <p className="muted">Glissez depuis une règle pour créer un repère.</p>
+          <p className="muted">{tr("Glissez depuis une règle pour créer un repère.")}</p>
         ) : (
           <ul className="guides">
             {guides.map((g) => (
@@ -62,7 +63,7 @@ export function Sidebar() {
             ))}
           </ul>
         )}
-        {guides.length > 0 && <button className="btn small secondary" onClick={() => void run(api.guidesClear)}>Tout effacer</button>}
+        {guides.length > 0 && <button className="btn small secondary" onClick={() => void run(api.guidesClear)}>{tr("Tout effacer")}</button>}
       </section>
     </aside>
   );

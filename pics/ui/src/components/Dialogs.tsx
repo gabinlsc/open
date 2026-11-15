@@ -1,3 +1,4 @@
+import { t as tr } from "../i18n";
 import { useEffect, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { api, CommandError, type TransformDto } from "../api";
@@ -34,11 +35,11 @@ export function NewDocumentDialog() {
   };
 
   return (
-    <Modal title="Nouveau document" onClose={close}>
+    <Modal title={tr("Nouveau document")} onClose={close}>
       <form onSubmit={submit} className="form">
-        <label>Nom<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Sans titre" /></label>
+        <label>{tr("Nom")}<input value={name} onChange={(e) => setName(e.target.value)} placeholder={tr("Sans titre")} /></label>
         <label>
-          Modèle
+          {tr("Modèle")}
           <select
             defaultValue=""
             onChange={(e) => {
@@ -49,18 +50,18 @@ export function NewDocumentDialog() {
               }
             }}
           >
-            <option value="" disabled>Choisir…</option>
-            {PRESETS.map((p, i) => <option key={p.label} value={i}>{p.label}</option>)}
+            <option value="" disabled>{tr("Choisir…")}</option>
+            {PRESETS.map((p, i) => <option key={p.label} value={i}>{tr(p.label)}</option>)}
           </select>
         </label>
         <div className="row">
-          <label>Largeur (px)<input inputMode="numeric" value={w} onChange={(e) => setW(e.target.value)} aria-invalid={!valid} /></label>
-          <label>Hauteur (px)<input inputMode="numeric" value={h} onChange={(e) => setH(e.target.value)} aria-invalid={!valid} /></label>
+          <label>{tr("Largeur (px)")}<input inputMode="numeric" value={w} onChange={(e) => setW(e.target.value)} aria-invalid={!valid} /></label>
+          <label>{tr("Hauteur (px)")}<input inputMode="numeric" value={h} onChange={(e) => setH(e.target.value)} aria-invalid={!valid} /></label>
         </div>
-        {!valid && <p className="error" role="alert">Les dimensions doivent être des entiers de 1 à {MAX_SIZE}.</p>}
+        {!valid && <p className="error" role="alert">{tr("Les dimensions doivent être des entiers de 1 à ")}{MAX_SIZE}.</p>}
         <div className="actions">
-          <button type="button" className="btn secondary" onClick={close}>Annuler</button>
-          <button type="submit" className="btn" disabled={!valid}>Créer</button>
+          <button type="button" className="btn secondary" onClick={close}>{tr("Annuler")}</button>
+          <button type="submit" className="btn" disabled={!valid}>{tr("Créer")}</button>
         </div>
       </form>
     </Modal>
@@ -90,7 +91,7 @@ export function ExportDialog() {
     setBusy(true);
     try {
       await api.docExport(path, ext === "jpg" ? quality : null);
-      useStore.getState().notify({ kind: "info", text: `Exporté : ${path}` });
+      useStore.getState().notify({ kind: "info", text: `${tr("Exporté :")} ${path}` });
       close();
     } catch (err) {
       useStore.getState().notify({ kind: "error", text: errorText(err) });
@@ -99,23 +100,23 @@ export function ExportDialog() {
   };
 
   return (
-    <Modal title="Exporter en image" onClose={close}>
+    <Modal title={tr("Exporter en image")} onClose={close}>
       <form onSubmit={submit} className="form">
         <label>
-          Format
+          {tr("Format")}
           <select value={ext} onChange={(e) => setExt(e.target.value)}>
-            {EXPORT_FORMATS.map((f) => <option key={f.ext} value={f.ext}>{f.label}</option>)}
+            {EXPORT_FORMATS.map((f) => <option key={f.ext} value={f.ext}>{tr(f.label)}</option>)}
           </select>
         </label>
         {ext === "jpg" && (
           <label>
-            Qualité : {quality}
+            {tr("Qualité : ")}{quality}
             <input type="range" min={1} max={100} value={quality} onChange={(e) => setQuality(Number(e.target.value))} />
           </label>
         )}
-        <p className="muted">Les calques visibles sont aplatis. Le document n'est pas modifié.</p>
+        <p className="muted">{tr("Les calques visibles sont aplatis. Le document n'est pas modifié.")}</p>
         <div className="actions">
-          <button type="button" className="btn secondary" onClick={close}>Annuler</button>
+          <button type="button" className="btn secondary" onClick={close}>{tr("Annuler")}</button>
           <button type="submit" className="btn" disabled={busy}>{busy ? "Export…" : "Exporter…"}</button>
         </div>
       </form>
@@ -139,12 +140,12 @@ export function ConfirmCloseDialog({ id, name }: { id: number; name: string }) {
     if (doc && !doc.dirty) await useStore.getState().run(() => api.docClose(id));
   };
   return (
-    <Modal title="Fermer sans enregistrer ?" onClose={close}>
-      <p>« {name} » contient des modifications non enregistrées.</p>
+    <Modal title={tr("Fermer sans enregistrer ?")} onClose={close}>
+      <p>« {name} {tr("» contient des modifications non enregistrées.")}</p>
       <div className="actions">
-        <button className="btn secondary" onClick={close}>Annuler</button>
-        <button className="btn secondary danger" onClick={closeDoc}>Ne pas enregistrer</button>
-        <button className="btn" onClick={saveThenClose}>Enregistrer</button>
+        <button className="btn secondary" onClick={close}>{tr("Annuler")}</button>
+        <button className="btn secondary danger" onClick={closeDoc}>{tr("Ne pas enregistrer")}</button>
+        <button className="btn" onClick={saveThenClose}>{tr("Enregistrer")}</button>
       </div>
     </Modal>
   );
@@ -186,26 +187,26 @@ export function ShortcutsDialog() {
   const actions = Object.keys(keymap).sort((a, b) => (ACTIONS[a]?.label ?? a).localeCompare(ACTIONS[b]?.label ?? b, "fr"));
 
   return (
-    <Modal title="Raccourcis clavier" onClose={close} wide>
+    <Modal title={tr("Raccourcis clavier")} onClose={close} wide>
       {error && <p className="error" role="alert">{error}</p>}
       <table className="shortcuts">
-        <thead><tr><th>Action</th><th>Raccourci</th><th /></tr></thead>
+        <thead><tr><th>{tr("Action")}</th><th>{tr("Raccourci")}</th><th /></tr></thead>
         <tbody>
           {actions.map((a) => (
             <tr key={a}>
               <td>{ACTIONS[a]?.label ?? a}</td>
-              <td>{capturing === a ? <em>Appuyez sur une combinaison… (Échap pour annuler)</em> : (keymap[a] ?? []).map((c) => <kbd key={c}>{prettyChord(c)}</kbd>)}</td>
+              <td>{capturing === a ? <em>{tr("Appuyez sur une combinaison… (Échap pour annuler)")}</em> : (keymap[a] ?? []).map((c) => <kbd key={c}>{prettyChord(c)}</kbd>)}</td>
               <td className="cell-actions">
-                <button className="btn small secondary" onClick={() => setCapturing(capturing === a ? null : a)}>Modifier</button>
-                <button className="btn small ghost" disabled={(keymap[a] ?? []).length === 0} onClick={() => void apply(a, [])}>Retirer</button>
+                <button className="btn small secondary" onClick={() => setCapturing(capturing === a ? null : a)}>{tr("Modifier")}</button>
+                <button className="btn small ghost" disabled={(keymap[a] ?? []).length === 0} onClick={() => void apply(a, [])}>{tr("Retirer")}</button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
       <div className="actions">
-        <button className="btn secondary" onClick={() => void apply("*", [])}>Tout réinitialiser</button>
-        <button className="btn" onClick={close}>Fermer</button>
+        <button className="btn secondary" onClick={() => void apply("*", [])}>{tr("Tout réinitialiser")}</button>
+        <button className="btn" onClick={close}>{tr("Fermer")}</button>
       </div>
     </Modal>
   );
@@ -230,19 +231,19 @@ export function TransformDialog() {
     if (await useStore.getState().run(() => api.layerTransform(t))) close();
   };
   const field = (key: keyof typeof v, label: string) => (
-    <label>{label}<input inputMode="decimal" value={v[key]} onChange={(e) => set(key, e.target.value)} /></label>
+    <label>{tr(label)}<input inputMode="decimal" value={v[key]} onChange={(e) => set(key, e.target.value)} /></label>
   );
   return (
-    <Modal title="Transformer le calque" onClose={close}>
+    <Modal title={tr("Transformer le calque")} onClose={close}>
       <form onSubmit={submit} className="form">
         <div className="row">{field("scaleX", "Largeur (%)")}{field("scaleY", "Hauteur (%)")}</div>
-        <label className="inline"><input type="checkbox" checked={linked} onChange={(e) => setLinked(e.target.checked)} /> Conserver les proportions</label>
+        <label className="inline"><input type="checkbox" checked={linked} onChange={(e) => setLinked(e.target.checked)} /> {tr("Conserver les proportions")}</label>
         {field("rotationDeg", "Rotation (° sens horaire)")}
         <div className="row">{field("translateX", "Déplacement X (px)")}{field("translateY", "Déplacement Y (px)")}</div>
-        <p className="muted">Autour du centre du document. La taille du calque ne change pas : ce qui sort du cadre est perdu (annulable).</p>
+        <p className="muted">{tr("Autour du centre du document. La taille du calque ne change pas : ce qui sort du cadre est perdu (annulable).")}</p>
         <div className="actions">
-          <button type="button" className="btn secondary" onClick={close}>Annuler</button>
-          <button type="submit" className="btn">Appliquer</button>
+          <button type="button" className="btn secondary" onClick={close}>{tr("Annuler")}</button>
+          <button type="submit" className="btn">{tr("Appliquer")}</button>
         </div>
       </form>
     </Modal>
@@ -265,12 +266,12 @@ export function SelectOpDialog({ op }: { op: keyof typeof SELECT_OPS }) {
     if (await useStore.getState().run(() => def.run(value))) close();
   };
   return (
-    <Modal title={def.title} onClose={close}>
+    <Modal title={tr(def.title)} onClose={close}>
       <form onSubmit={submit} className="form">
-        <label>{def.label}<input inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)} /></label>
+        <label>{tr(def.label)}<input inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)} /></label>
         <div className="actions">
-          <button type="button" className="btn secondary" onClick={close}>Annuler</button>
-          <button type="submit" className="btn">Appliquer</button>
+          <button type="button" className="btn secondary" onClick={close}>{tr("Annuler")}</button>
+          <button type="submit" className="btn">{tr("Appliquer")}</button>
         </div>
       </form>
     </Modal>

@@ -1,3 +1,4 @@
+import { t as tr } from "../i18n";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { ACTIONS } from "../actions";
@@ -91,11 +92,11 @@ export function CanvasArea() {
   if (!hasDoc) {
     return (
       <div className="welcome">
-        <h1>Bienvenue dans OpenPics</h1>
-        <p>Créez un document ou ouvrez une image. Vous pouvez aussi glisser des fichiers dans cette fenêtre.</p>
+        <h1>{tr("Bienvenue dans OpenPics")}</h1>
+        <p>{tr("Créez un document ou ouvrez une image. Vous pouvez aussi glisser des fichiers dans cette fenêtre.")}</p>
         <div className="row">
-          <button className="btn" onClick={() => void ACTIONS["file.new"]?.run()}>Nouveau document</button>
-          <button className="btn secondary" onClick={() => void ACTIONS["file.open"]?.run()}>Ouvrir une image…</button>
+          <button className="btn" onClick={() => void ACTIONS["file.new"]?.run()}>{tr("Nouveau document")}</button>
+          <button className="btn secondary" onClick={() => void ACTIONS["file.open"]?.run()}>{tr("Ouvrir une image…")}</button>
         </div>
       </div>
     );
@@ -105,7 +106,7 @@ export function CanvasArea() {
   return (
     <div className="center" style={{ gridTemplateColumns: `${r}px 1fr`, gridTemplateRows: `${r}px 1fr` }}>
       {showRulers && <Rulers width={size.width} height={size.height} />}
-      <div ref={hostRef} className="canvas-host" style={{ gridColumn: 2, gridRow: 2 }} aria-label="Zone de dessin">
+      <div ref={hostRef} className="canvas-host" style={{ gridColumn: 2, gridRow: 2 }} aria-label={tr("Zone de dessin")}>
         <canvas ref={frozenRef} className="canvas-frozen" hidden={!frozen} aria-hidden="true" />
       </div>
     </div>

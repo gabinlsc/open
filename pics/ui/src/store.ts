@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { initLang, setLang as persistLang, type Lang } from "./i18n";
+import { initLang, setLang as persistLang, t, type Lang } from "./i18n";
 import { api, CommandError, type CursorEvent, type KeymapDto, type SettingsDto, type Snapshot, type ThemeChoice } from "./api";
 
 export type Dialog =
@@ -93,7 +93,7 @@ export const useStore = create<UiState>()((set, get) => ({
       // Des copies de récupération au démarrage = la session précédente s'est mal terminée.
       if ((await api.recoveryList().catch(() => [])).length > 0) set({ dialog: { kind: "recovery" } });
     } catch (e) {
-      set({ ready: true, notice: { kind: "error", text: `Démarrage impossible : ${errorText(e)}` } });
+      set({ ready: true, notice: { kind: "error", text: `${t("Démarrage impossible :")} ${errorText(e)}` } });
     }
   },
 

@@ -9,5 +9,5 @@
 ## Non livré
 - **Scripts (Lua/JS)**, **enregistrement d'actions** : non faits. Un moteur de script embarqué est une surface de sécurité (accès fichiers) qui demande sa propre conception ; je préfère ne rien livrer qu'un bac à sable approximatif.
 - **Plans de travail multiples (artboards)**, **export multi-résolutions**, **comparaison avant/après**, **explorateur de fichiers** : non faits (le moteur n'a pas encore de redimensionnement ni de modèle de document à plusieurs cadres).
-- **Traduction complète** : les boîtes de dialogue, panneaux et messages d'erreur restent en français ; seuls menus, actions et outils sont traduits. Les filtres et réglages gardent leurs libellés français venus du cœur.
+- **Traduction** (complétée ensuite) : menus, outils, boîtes de dialogue, panneaux, filtres, réglages et modes de fusion sont traduits en anglais ; un test vérifie que chaque texte affiché a sa traduction. Restent en français : les messages d'erreur venus du cœur, les noms d'étapes d'historique et les noms de calques créés par défaut (ce sont des données du document).
 - Le lot n'expose pas les paramètres du filtre (valeurs par défaut uniquement).

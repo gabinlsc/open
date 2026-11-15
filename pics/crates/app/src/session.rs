@@ -66,6 +66,8 @@ pub struct Session {
     filter_preview: Option<filters::FilterPreview>,
     pen: Option<vector::PenState>,
     node_drag: Option<vector::NodeDrag>,
+    /// Point sélectionné avec la Sélection directe (calque, chemin, point) : cible de Suppr.
+    node_selected: Option<(LayerId, usize, usize)>,
     shape_drag: Option<((f64, f64), bool)>,
     /// Source du tampon et du correcteur (Alt + clic) et décalage source − destination une fois fixé.
     clone_source: Option<(f64, f64)>,
@@ -111,6 +113,7 @@ impl Session {
             filter_preview: None,
             pen: None,
             node_drag: None,
+            node_selected: None,
             shape_drag: None,
             clone_source: None,
             clone_offset: None,

@@ -259,9 +259,133 @@ impl VectorModel {
     }
 }
 
+/// Courbe de Bézier cubique entre deux points d'ancrage consécutifs.
+fn cubic(a: &Anchor, b: &Anchor) -> [Pt; 4] {
+    [a.pos, (a.pos.0 + a.h_out.0, a.pos.1 + a.h_out.1), (b.pos.0 + b.h_in.0, b.pos.1 + b.h_in.1), b.pos]
+}
+
+fn lerp(p: Pt, q: Pt, t: f64) -> Pt {
+    (p.0 + (q.0 - p.0) * t, p.1 + (q.1 - p.1) * t)
+}
+
+fn eval(c: &[Pt; 4], t: f64) -> Pt {
+    let (q0, q1, q2) = (lerp(c[0], c[1], t), lerp(c[1], c[2], t), lerp(c[2], c[3], t));
+    lerp(lerp(q0, q1, t), lerp(q1, q2, t), t)
+}
+
+impl Path {
+    /// Segments du chemin : (indice du point de départ, indice du point d'arrivée).
+    fn segments(&self) -> Vec<(usize, usize)> {
+        let n = self.anchors.len();
+        let mut s: Vec<_> = (0..n.saturating_sub(1)).map(|i| (i, i + 1)).collect();
+        if self.closed && n > 2 {
+            s.push((n - 1, 0));
+        }
+        s
+    }
+
+    /// Point du chemin le plus proche de `p` : (segment, paramètre t, distance).
+    pub fn nearest(&self, p: Pt) -> Option<(usize, f64, f64)> {
+        let dist = |q: Pt| (q.0 - p.0).hypot(q.1 - p.1);
+        let mut best: Option<(usize, f64, f64)> = None;
+        for (si, &(i, j)) in self.segments().iter().enumerate() {
+            let c = cubic(&self.anchors[i], &self.anchors[j]);
+            // Échantillonnage grossier puis affinage par trichotomie autour du meilleur échantillon.
+            const N: usize = 64;
+            let mut t_best = 0.0;
+            let mut d_best = f64::MAX;
+            for k in 0..=N {
+                let t = k as f64 / N as f64;
+                let d = dist(eval(&c, t));
+                if d < d_best {
+                    (t_best, d_best) = (t, d);
+                }
+            }
+            let (mut lo, mut hi) = ((t_best - 1.0 / N as f64).max(0.0), (t_best + 1.0 / N as f64).min(1.0));
+            for _ in 0..40 {
+                let (m1, m2) = (lo + (hi - lo) / 3.0, hi - (hi - lo) / 3.0);
+                if dist(eval(&c, m1)) < dist(eval(&c, m2)) {
+                    hi = m2;
+                } else {
+                    lo = m1;
+                }
+            }
+            let t = (lo + hi) / 2.0;
+            let d = dist(eval(&c, t));
+            if best.is_none_or(|b| d < b.2) {
+                best = Some((si, t, d));
+            }
+        }
+        best
+    }
+
+    /// Insère un point sur le segment `seg` au paramètre `t` sans changer la forme (algorithme de De Casteljau).
+    /// Renvoie l'indice du nouveau point.
+    pub fn insert_at(&mut self, seg: usize, t: f64) -> Option<usize> {
+        let &(i, j) = self.segments().get(seg)?;
+        if self.anchors.len() >= MAX_ANCHORS {
+            return None;
+        }
+        let t = t.clamp(0.0, 1.0);
+        let (a, b) = (self.anchors[i], self.anchors[j]);
+        let corner = a.h_out == (0.0, 0.0) && b.h_in == (0.0, 0.0);
+        let c = cubic(&a, &b);
+        let (q0, q1, q2) = (lerp(c[0], c[1], t), lerp(c[1], c[2], t), lerp(c[2], c[3], t));
+        let (r0, r1) = (lerp(q0, q1, t), lerp(q1, q2, t));
+        let s = lerp(r0, r1, t);
+        let new = if corner {
+            Anchor::corner(s.0, s.1)
+        } else {
+            self.anchors[i].h_out = (q0.0 - c[0].0, q0.1 - c[0].1);
+            self.anchors[j].h_in = (q2.0 - c[3].0, q2.1 - c[3].1);
+            Anchor { pos: s, h_in: (r0.0 - s.0, r0.1 - s.1), h_out: (r1.0 - s.0, r1.1 - s.1) }
+        };
+        let at = if j == 0 { self.anchors.len() } else { j };
+        self.anchors.insert(at, new);
+        Some(at)
+    }
+
+    /// Nombre minimal de points : 2 pour un chemin ouvert, 3 pour un chemin fermé.
+    pub fn min_anchors(&self) -> usize {
+        if self.closed { 3 } else { 2 }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inserting_a_point_keeps_the_curve_and_finds_the_nearest_spot() {
+        let mut e = Path::ellipse(50.0, 50.0, 40.0, 20.0);
+        let before = e.flatten(0.05);
+        let (seg, t, d) = e.nearest((50.0, 70.0)).unwrap();
+        assert!(d < 0.01, "le bas de l'ellipse est sur le tracé : {d}");
+        let idx = e.insert_at(seg, t).unwrap();
+        assert_eq!(e.anchors.len(), 5);
+        let p = e.anchors[idx].pos;
+        assert!((p.0 - 50.0).abs() < 0.01 && (p.1 - 70.0).abs() < 0.01, "{p:?}");
+        // La forme ne change pas : chaque point de l'ancien tracé reste sur le nouveau.
+        for q in before.iter().step_by(7) {
+            assert!(e.nearest(*q).unwrap().2 < 0.05, "écart au point {q:?}");
+        }
+        // Sur un segment droit, le nouveau point reste anguleux.
+        let mut r = Path::rect(0.0, 0.0, 10.0, 10.0);
+        let (seg, t, _) = r.nearest((5.0, -1.0)).unwrap();
+        let idx = r.insert_at(seg, t).unwrap();
+        let near = |a: Pt, b: Pt| (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6;
+        assert!(
+            near(r.anchors[idx].pos, (5.0, 0.0))
+                && r.anchors[idx].h_in == (0.0, 0.0)
+                && r.anchors[idx].h_out == (0.0, 0.0)
+        );
+        // Le segment de fermeture (dernier → premier) insère en fin de liste.
+        let (seg, t, _) = r.nearest((-1.0, 5.0)).unwrap();
+        assert_eq!(r.insert_at(seg, t), Some(5));
+        assert!(near(r.anchors[5].pos, (0.0, 5.0)), "{:?}", r.anchors[5].pos);
+        assert_eq!(r.min_anchors(), 3);
+        assert!(Path::line((0.0, 0.0), (1.0, 1.0)).insert_at(3, 0.5).is_none(), "segment inexistant");
+    }
 
     #[test]
     fn shapes_have_the_expected_geometry() {

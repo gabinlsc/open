@@ -12,7 +12,7 @@
 - **Formats** : PNG, JPEG, WebP, TIFF, BMP, GIF, et `.ocv` natif (calques, masques, texte et formes éditables).
 
 ## Limites connues (honnêtes)
-Voir `docs/PHASE9.md`. En bref : pas de plans de travail multiples, pas d'ajout ni de suppression de points sur un tracé, pas de modèles génératifs (remplissage, super-résolution, colorisation), dialogues non traduits en anglais, ONNX Runtime à fournir soi-même, application jamais exécutée sur un Windows réel pendant le développement (compilée et éditée de liens seulement).
+Voir `docs/PHASE9.md`. En bref : pas de plans de travail multiples, pas de modèles génératifs (remplissage, super-résolution, colorisation), dialogues non traduits en anglais, ONNX Runtime à fournir soi-même, application jamais exécutée sur un Windows réel pendant le développement (compilée et éditée de liens seulement).
 
 ## Construire
 ```bash

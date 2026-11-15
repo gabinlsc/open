@@ -11,7 +11,7 @@ use image::{DynamicImage, ImageReader, RgbaImage};
 use openpics_core::adjust::{AdjKind, Adjustment, Extra, Lut3D};
 use openpics_core::tile::MAX_DIMENSION;
 use openpics_core::{
-    BlendMode, DocId, Document, Guide, Layer, LayerId, LayerKind, LayerStyle, Locks, Mask, Size, TileGrid,
+    Artboard, BlendMode, DocId, Document, Guide, Layer, LayerId, LayerKind, LayerStyle, Locks, Mask, Size, TileGrid,
 };
 use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
@@ -37,6 +37,8 @@ struct Manifest {
     layers: Vec<LayerEntry>,
     #[serde(default)]
     guides: Vec<Guide>,
+    #[serde(default)]
+    artboards: Vec<Artboard>,
 }
 
 fn one() -> f32 {
@@ -237,6 +239,7 @@ pub(crate) fn write(doc: &Document, path: &Path) -> Result<(), IoError> {
         height: size.height,
         layers: doc.layers.iter().map(LayerEntry::from_layer).collect(),
         guides: doc.guides.clone(),
+        artboards: doc.artboards.clone(),
     };
     let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
     zip.start_file(MANIFEST, SimpleFileOptions::default().compression_method(CompressionMethod::Deflated))?;
@@ -337,6 +340,17 @@ pub(crate) fn read(path: &Path, id: DocId) -> Result<Document, IoError> {
     }
     max_id = manifest.guides.iter().map(|g| g.id).fold(max_id, u64::max);
     doc.guides = manifest.guides;
+    // Plans de travail relus : ramenés dans le document, plafonnés, identifiants uniques.
+    let mut seen = std::collections::HashSet::new();
+    let size = doc.size();
+    doc.artboards = manifest
+        .artboards
+        .into_iter()
+        .filter_map(|a| a.clamped(size))
+        .filter(|a| seen.insert(a.id))
+        .take(openpics_core::document::MAX_ARTBOARDS)
+        .collect();
+    max_id = doc.artboards.iter().map(|a| a.id).fold(max_id, u64::max);
     doc.reserve_ids_up_to(max_id);
     Ok(doc)
 }
@@ -379,6 +393,32 @@ mod tests {
         let mut back = back;
         let fresh = back.alloc_id();
         assert!(back.layers.iter().all(|l| l.id.0 != fresh) && back.guides.iter().all(|g| g.id != fresh));
+    }
+
+    #[test]
+    fn artboards_roundtrip_and_hostile_ones_are_cleaned() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("ab.ocv");
+        let mut d = sample();
+        let id = d.alloc_id();
+        d.artboards = vec![Artboard { id, name: "Carré".into(), x: 10, y: 20, w: 100, h: 100 }];
+        save(&mut d, &p).unwrap();
+        let mut back = open(&p, DocId(2)).unwrap();
+        assert_eq!(back.artboards, d.artboards);
+        assert_ne!(back.alloc_id(), id, "l'identifiant relu n'est pas réattribué");
+        // Manifeste trafiqué : plan hors document, doublon d'identifiant, plan qui déborde.
+        let size = d.size();
+        let hostile = vec![
+            Artboard { id: 1, name: "ok".into(), x: 0, y: 0, w: 10, h: 10 },
+            Artboard { id: 1, name: "doublon".into(), x: 0, y: 0, w: 10, h: 10 },
+            Artboard { id: 2, name: "dehors".into(), x: size.width + 5, y: 0, w: 10, h: 10 },
+            Artboard { id: 3, name: "déborde".into(), x: size.width - 5, y: 0, w: 50, h: 10 },
+        ];
+        d.artboards = hostile;
+        save(&mut d, &p).unwrap();
+        let back = open(&p, DocId(3)).unwrap();
+        let names: Vec<_> = back.artboards.iter().map(|a| (a.name.as_str(), a.w)).collect();
+        assert_eq!(names, [("ok", 10), ("déborde", 5)]);
     }
 
     #[test]

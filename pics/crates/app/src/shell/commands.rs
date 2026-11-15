@@ -652,3 +652,54 @@ pub async fn folder_images(dir: String) -> ApiResult<Vec<String>> {
 pub fn node_delete(shared: State<'_, Shared>) -> ApiResult<Snapshot> {
     mutate(&shared, |s| s.node_delete().map(|_| ()))
 }
+
+#[tauri::command]
+pub fn artboard_add(
+    shared: State<'_, Shared>,
+    x: u32,
+    y: u32,
+    w: u32,
+    h: u32,
+    name: Option<String>,
+) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.artboard_add(x, y, w, h, name).map(|_| ()))
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn artboard_set(
+    shared: State<'_, Shared>,
+    id: u64,
+    name: String,
+    x: u32,
+    y: u32,
+    w: u32,
+    h: u32,
+) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.artboard_set(id, &name, x, y, w, h))
+}
+
+#[tauri::command]
+pub fn artboard_remove(shared: State<'_, Shared>, id: u64) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| s.artboard_remove(id))
+}
+
+#[tauri::command]
+pub fn artboard_select(shared: State<'_, Shared>, id: Option<u64>) -> ApiResult<Snapshot> {
+    mutate(&shared, |s| {
+        s.artboard_select(id);
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub async fn artboards_export(
+    shared: State<'_, Shared>,
+    path: String,
+    scales: Vec<f64>,
+    jpeg_quality: Option<u8>,
+) -> ApiResult<Vec<String>> {
+    let session = shared.lock()?;
+    let files = session.artboards_export(std::path::Path::new(&path), &scales, jpeg_quality)?;
+    Ok(files.into_iter().map(|f| f.display().to_string()).collect())
+}

@@ -213,3 +213,9 @@ export const DirectSelectIcon = () => (
     <rect x="15.5" y="15.5" width="5" height="5" rx=".6" />
   </svg>
 );
+export const ArtboardIcon = () => (
+  <svg {...base}>
+    <rect x="6" y="6" width="12" height="12" rx="1" />
+    <path d="M6 2.5v2M18 2.5v2M6 19.5v2M18 19.5v2M2.5 6h2M2.5 18h2M19.5 6h2M19.5 18h2" />
+  </svg>
+);

@@ -291,7 +291,7 @@ export function Dialogs() {
     case "resize":
       return <ResizeDialog />;
     case "exportScales":
-      return <ExportScalesDialog />;
+      return <ExportScalesDialog artboards={dialog.artboards ?? false} />;
     case "scripts":
       return <ScriptsDialog />;
     case "browser":

@@ -13,6 +13,7 @@ const SHOTS = [
   { file: "selection-sujet", scene: "02-subject" },
   { file: "arriere-plan", scene: "03-background" },
   { file: "vectoriel-texte", scene: "04-vector" },
+  { file: "plans-de-travail", scene: "06-artboards" },
   {
     file: "filtres",
     scene: "05-filters",

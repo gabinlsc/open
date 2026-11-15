@@ -25,7 +25,7 @@ fn scaled_layer(l: &Layer, w: u32, h: u32) -> Result<Layer, SessionError> {
 }
 
 /// Document aplati, rééchantillonné à `scale`, prêt à être exporté.
-fn scaled_flat(doc: &Document, scale: f64) -> Result<Document, SessionError> {
+pub(super) fn scaled_flat(doc: &Document, scale: f64) -> Result<Document, SessionError> {
     let size = doc.size();
     let (w, h) = (
         (f64::from(size.width) * scale).round().clamp(1.0, f64::from(MAX_DIMENSION)) as u32,
@@ -74,7 +74,20 @@ impl Session {
             })
             .collect();
         let selection = doc.selection.as_ref().map(|s| resample_mask(s, width, height)).transpose()?;
-        let state = DocState { size: Size::new(width, height), layers, guides, selection };
+        let scale = |v: u32, f: f64| (f64::from(v) * f).round() as u32;
+        let artboards = doc
+            .artboards
+            .iter()
+            .map(|a| openpics_core::Artboard {
+                x: scale(a.x, fx),
+                y: scale(a.y, fy),
+                w: scale(a.w, fx).max(1),
+                h: scale(a.h, fy).max(1),
+                ..a.clone()
+            })
+            .filter_map(|a| a.clamped(Size::new(width, height)))
+            .collect();
+        let state = DocState { size: Size::new(width, height), layers, guides, artboards, selection };
         self.entry_mut()?.doc.execute(Box::new(ReplaceDocState::new("Taille de l'image", state)))?;
         self.entry_mut()?.fitted = false;
         self.ensure_fitted();

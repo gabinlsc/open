@@ -647,6 +647,7 @@ pub struct DocState {
     pub size: crate::Size,
     pub layers: Vec<crate::Layer>,
     pub guides: Vec<crate::Guide>,
+    pub artboards: Vec<crate::Artboard>,
     pub selection: Option<TileGrid>,
 }
 
@@ -668,6 +669,7 @@ impl ReplaceDocState {
                 size: doc.size(),
                 layers: std::mem::replace(&mut doc.layers, s.layers),
                 guides: std::mem::replace(&mut doc.guides, s.guides),
+                artboards: std::mem::replace(&mut doc.artboards, s.artboards),
                 selection: std::mem::replace(&mut doc.selection, s.selection),
             };
             doc.set_size(s.size);
@@ -692,9 +694,67 @@ impl Command for ReplaceDocState {
     }
 }
 
+/// Remplace la liste des plans de travail (ajout, modification, suppression : une seule étape d'historique).
+pub struct SetArtboards {
+    name: String,
+    after: Vec<crate::Artboard>,
+    before: Option<Vec<crate::Artboard>>,
+}
+
+impl SetArtboards {
+    pub fn new(name: impl Into<String>, artboards: Vec<crate::Artboard>) -> Self {
+        Self { name: name.into(), after: artboards, before: None }
+    }
+}
+
+impl Command for SetArtboards {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn apply(&mut self, doc: &mut Document) -> Result<(), CoreError> {
+        let size = doc.size();
+        let next: Vec<_> =
+            self.after.iter().cloned().filter_map(|a| a.clamped(size)).take(crate::document::MAX_ARTBOARDS).collect();
+        self.before = Some(std::mem::replace(&mut doc.artboards, next));
+        Ok(())
+    }
+
+    fn revert(&mut self, doc: &mut Document) -> Result<(), CoreError> {
+        if let Some(b) = self.before.take() {
+            doc.artboards = b;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn artboards_are_clamped_to_the_document_and_undoable() {
+        let mut d = Document::new(crate::DocId(1), "t", crate::Size::new(100, 80)).unwrap();
+        let ab = |id, x, y, w, h| crate::Artboard { id, name: format!("A{id}"), x, y, w, h };
+        d.execute(Box::new(SetArtboards::new(
+            "Plans",
+            vec![ab(1, 10, 10, 50, 50), ab(2, 90, 70, 50, 50), ab(3, 200, 0, 5, 5)],
+        )))
+        .unwrap();
+        assert_eq!(d.artboards.len(), 2, "le plan entièrement hors du document est retiré");
+        assert_eq!((d.artboards[1].w, d.artboards[1].h), (10, 10), "le plan qui déborde est rogné");
+        d.undo().unwrap();
+        assert!(d.artboards.is_empty());
+        d.redo().unwrap();
+        assert_eq!(d.artboards.len(), 2);
+        let mut named = ab(4, 0, 0, 1, 1);
+        named.name = "\u{7}".into();
+        assert_eq!(
+            named.clamped(d.size()).unwrap().name,
+            "Plan de travail",
+            "un nom vide ou de contrôle reçoit un nom par défaut"
+        );
+    }
     use crate::document::DocId;
     use crate::geom::Size;
 

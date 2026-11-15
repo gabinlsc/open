@@ -100,6 +100,7 @@ impl Session {
             | Tool::ShapeLine
             | Tool::Pen => self.vector_down(p, at)?,
             Tool::DirectSelect => self.node_down(p, at)?,
+            Tool::Artboard => self.artboard_down(at),
             _ => self.paint_down(p, at)?,
         }
         Ok(())
@@ -112,6 +113,9 @@ impl Session {
         }
         if self.node_drag.is_some() {
             return self.node_move(p, at);
+        }
+        if self.artboard_drag.is_some() {
+            return self.artboard_move(at);
         }
         if self.shape_drag.is_some() || self.pen.is_some() {
             return self.vector_move(at);
@@ -138,6 +142,9 @@ impl Session {
         }
         if self.node_drag.is_some() {
             return self.node_up();
+        }
+        if self.artboard_drag.is_some() {
+            return self.artboard_up(at);
         }
         if self.shape_drag.is_some() || self.pen.is_some() {
             return self.vector_up(at);
@@ -183,6 +190,7 @@ impl Session {
     pub fn tool_cancel(&mut self) {
         self.paint_cancel();
         self.vector_cancel();
+        self.artboard_drag = None;
         self.drag = None;
         self.selection_preview = None;
     }

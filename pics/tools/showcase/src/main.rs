@@ -190,6 +190,16 @@ fn main() {
     text(&mut s, (156.0, 716.0), "Gratuit · GPLv3", 40.0, "#2447d6", true);
     dump(&mut ctx, "04-vector", &s);
 
+    // 06 — plans de travail : plusieurs formats dans un même document.
+    let mut s = session(&ctx, ResolvedTheme::Light);
+    orange(&mut s);
+    s.artboard_add(400, 120, 800, 800, Some("Carré Instagram".into())).unwrap();
+    s.artboard_add(40, 330, 1520, 400, Some("Bannière web".into())).unwrap();
+    s.set_tool(Tool::Artboard);
+    let first = s.snapshot().artboards[0].id;
+    s.artboard_select(Some(first));
+    dump(&mut ctx, "06-artboards", &s);
+
     // 05 — filtres : aperçu en direct (l'état d'interface « filtre ouvert » est posé par la capture).
     let mut s = session(&ctx, ResolvedTheme::Light);
     orange(&mut s);

@@ -13,7 +13,7 @@ export type Dialog =
   | { kind: "recovery" }
   | { kind: "batch" }
   | { kind: "resize" }
-  | { kind: "exportScales" }
+  | { kind: "exportScales"; artboards?: boolean }
   | { kind: "scripts" }
   | { kind: "browser" }
   | { kind: "aiSubject"; remove: boolean }

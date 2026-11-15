@@ -43,6 +43,7 @@ export function MenuBar() {
         { action: "file.save_as" },
         { action: "file.export" },
         { action: "file.export_scales" },
+        { action: "file.export_artboards" },
         { sep: true },
         { action: "file.close" },
       ],

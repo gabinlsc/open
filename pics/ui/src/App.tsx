@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useEffect, useRef } from "react";
 import { api, events, type CursorEvent, type Snapshot } from "./api";
@@ -18,6 +19,8 @@ const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isCon
 export function App() {
   const ready = useStore((s) => s.ready);
   const themeChoice = useStore((s) => s.themeChoice);
+  // Changer de langue remonte l'interface : chaque libellé est relu dans la nouvelle langue.
+  const lang = useStore((s) => s.lang);
   const gpuError = useStore((s) => s.gpuError);
   const notice = useStore((s) => s.notice);
   const keymap = useStore((s) => s.keymap);
@@ -109,14 +112,14 @@ export function App() {
 
   if (!ready) return null;
   return (
-    <div className="app">
+    <div className="app" key={lang}>
       <header className="appbar">
         <img className="brand" src="/favicon.svg" alt="" width={24} height={24} />
         <MenuBar />
       </header>
       {gpuError && (
         <div className="banner" role="alert">
-          Le rendu n'a pas pu démarrer : {gpuError}
+          {t("Le rendu n'a pas pu démarrer :")} {gpuError}
         </div>
       )}
       <Tabs />
@@ -130,7 +133,7 @@ export function App() {
       {notice && (
         <div className={`toast ${notice.kind}`} role={notice.kind === "error" ? "alert" : "status"}>
           <span className="toast-text">{notice.text}</span>
-          <button className="btn small ghost" aria-label="Fermer la notification" onClick={() => useStore.getState().notify(null)}>×</button>
+          <button className="btn small ghost" aria-label={t("Fermer la notification")} onClick={() => useStore.getState().notify(null)}>×</button>
         </div>
       )}
     </div>

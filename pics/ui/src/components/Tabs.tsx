@@ -1,3 +1,4 @@
+import { t as tr } from "../i18n";
 import { api } from "../api";
 import { requestClose, ACTIONS } from "../actions";
 import { useStore } from "../store";
@@ -8,7 +9,7 @@ export function Tabs() {
   const run = useStore((s) => s.run);
   if (!snapshot) return <div className="tabs" />;
   return (
-    <div className="tabs" role="tablist" aria-label="Documents ouverts">
+    <div className="tabs" role="tablist" aria-label={tr("Documents ouverts")}>
       {snapshot.docs.map((d) => {
         const active = d.id === snapshot.activeId;
         return (
@@ -25,7 +26,7 @@ export function Tabs() {
           >
             <button role="tab" aria-selected={active} className="tab-main" title={d.path ?? d.name} onClick={() => !active && void run(() => api.docActivate(d.id))}>
               <span className="tab-name">{d.name}</span>
-              {d.dirty && <span className="dirty" role="img" aria-label="modifié">●</span>}
+              {d.dirty && <span className="dirty" role="img" aria-label={tr("modifié")}>●</span>}
             </button>
             <button className="tab-close" aria-label={`Fermer ${d.name}`} onClick={() => requestClose(d.id)}>
               <CloseIcon />
@@ -33,7 +34,7 @@ export function Tabs() {
           </div>
         );
       })}
-      <button className="tab-new" aria-label="Nouveau document" title="Nouveau document" onClick={() => void ACTIONS["file.new"]?.run()}>
+      <button className="tab-new" aria-label={tr("Nouveau document")} title={tr("Nouveau document")} onClick={() => void ACTIONS["file.new"]?.run()}>
         <PlusIcon />
       </button>
     </div>

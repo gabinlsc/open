@@ -1,3 +1,4 @@
+import { t as tr } from "../i18n";
 import { useEffect, useState } from "react";
 import { api, type LayerDto, type LayerPropsDto } from "../api";
 import { useStore } from "../store";
@@ -33,7 +34,7 @@ function RenameField({ layer }: { layer: LayerDto }) {
   };
   return (
     <label className="field">
-      Nom
+      {tr("Nom")}
       <input value={name} onChange={(e) => setName(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()} />
     </label>
   );
@@ -49,8 +50,8 @@ export function LayerPanel() {
 
   return (
     <section aria-labelledby="p-layers">
-      <h3 id="p-layers">Calques</h3>
-      <ul className="layers" role="listbox" aria-label="Pile de calques, du haut vers le bas">
+      <h3 id="p-layers">{tr("Calques")}</h3>
+      <ul className="layers" role="listbox" aria-label={tr("Pile de calques, du haut vers le bas")}>
         {layers.map((l) => (
           <li key={l.id} role="option" aria-selected={l.id === activeLayerId} aria-level={l.depth + 1} className={l.id === activeLayerId ? "layer active" : "layer"} style={{ paddingLeft: l.depth * 14 }}>
             <button
@@ -63,21 +64,21 @@ export function LayerPanel() {
               {l.visible ? "◉" : "○"}
             </button>
             <button className="layer-name" onClick={() => void run(() => api.layerSelect(l.id))}>
-              {l.isGroup && <span aria-label="groupe" title="Groupe">▸ </span>}
-              {l.clipToBelow && <span aria-label="écrêté" title="Masque d'écrêtage">↳ </span>}
+              {l.isGroup && <span aria-label={tr("groupe")} title={tr("Groupe")}>▸ </span>}
+              {l.clipToBelow && <span aria-label={tr("écrêté")} title={tr("Masque d'écrêtage")}>↳ </span>}
               {l.name}
-              {l.hasMask && <span className={l.maskEnabled ? "badge" : "badge off"} title="Masque de calque">masque</span>}
-              {(l.locks.all || l.locks.pixels || l.locks.position) && <span className="badge" title="Verrouillé">verrou</span>}
+              {l.hasMask && <span className={l.maskEnabled ? "badge" : "badge off"} title={tr("Masque de calque")}>{tr("masque")}</span>}
+              {(l.locks.all || l.locks.pixels || l.locks.position) && <span className="badge" title={tr("Verrouillé")}>{tr("verrou")}</span>}
             </button>
           </li>
         ))}
       </ul>
       <div className="row wrap">
-        <button className="btn small secondary" onClick={() => void run(api.layerAdd)}>Nouveau</button>
-        <button className="btn small secondary" onClick={() => void run(api.groupAdd)}>Groupe</button>
-        <button className="btn small secondary" disabled={!active || layers.length <= 1} onClick={() => active && void run(() => api.layerRemove(active.id))}>Supprimer</button>
-        <button className="btn small ghost" aria-label="Monter le calque" disabled={!active} onClick={() => active && void run(() => api.layerMoveStep(active.id, true))}>↑</button>
-        <button className="btn small ghost" aria-label="Descendre le calque" disabled={!active} onClick={() => active && void run(() => api.layerMoveStep(active.id, false))}>↓</button>
+        <button className="btn small secondary" onClick={() => void run(api.layerAdd)}>{tr("Nouveau")}</button>
+        <button className="btn small secondary" onClick={() => void run(api.groupAdd)}>{tr("Groupe")}</button>
+        <button className="btn small secondary" disabled={!active || layers.length <= 1} onClick={() => active && void run(() => api.layerRemove(active.id))}>{tr("Supprimer")}</button>
+        <button className="btn small ghost" aria-label={tr("Monter le calque")} disabled={!active} onClick={() => active && void run(() => api.layerMoveStep(active.id, true))}>↑</button>
+        <button className="btn small ghost" aria-label={tr("Descendre le calque")} disabled={!active} onClick={() => active && void run(() => api.layerMoveStep(active.id, false))}>↓</button>
       </div>
 
       {active && (
@@ -85,35 +86,35 @@ export function LayerPanel() {
           <RenameField layer={active} />
           {!active.adjustment && (
           <label className="field">
-            Mode de fusion
+            {tr("Mode de fusion")}
             <select value={active.blend} onChange={(e) => patch(active, { blend: e.target.value })}>
-              {blendModes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              {blendModes.map((m) => <option key={m.id} value={m.id}>{tr(m.label)}</option>)}
             </select>
           </label>
           )}
           <label className="field">
-            Dans le groupe
+            {tr("Dans le groupe")}
             <select
               value={active.group ?? ""}
               onChange={(e) => void run(() => api.layerSetGroup(active.id, e.target.value === "" ? null : Number(e.target.value)))}
             >
-              <option value="">(aucun)</option>
+              <option value="">{tr("(aucun)")}</option>
               {layers.filter((l) => l.isGroup && l.id !== active.id).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
           </label>
           {active.isGroup && (
             <label className="inline">
-              <input type="checkbox" checked={!active.isolated} onChange={(e) => patch(active, { isolated: !e.target.checked })} /> Traverser (ne pas isoler le groupe)
+              <input type="checkbox" checked={!active.isolated} onChange={(e) => patch(active, { isolated: !e.target.checked })} /> {tr("Traverser (ne pas isoler le groupe)")}
             </label>
           )}
-          <Percent label="Opacité" value={active.opacity} onCommit={(v) => patch(active, { opacity: v })} />
-          <Percent label="Remplissage" value={active.fill} onCommit={(v) => patch(active, { fill: v })} />
+          <Percent label={tr("Opacité")} value={active.opacity} onCommit={(v) => patch(active, { opacity: v })} />
+          <Percent label={tr("Remplissage")} value={active.fill} onCommit={(v) => patch(active, { fill: v })} />
           <fieldset className="checks">
-            <legend>Verrous et écrêtage</legend>
-            <label><input type="checkbox" checked={active.locks.pixels} onChange={(e) => patch(active, { locks: { ...active.locks, pixels: e.target.checked } })} /> Pixels</label>
-            <label><input type="checkbox" checked={active.locks.position} onChange={(e) => patch(active, { locks: { ...active.locks, position: e.target.checked } })} /> Position</label>
-            <label><input type="checkbox" checked={active.locks.all} onChange={(e) => patch(active, { locks: { ...active.locks, all: e.target.checked } })} /> Tout</label>
-            <label><input type="checkbox" checked={active.clipToBelow} onChange={(e) => patch(active, { clipToBelow: e.target.checked })} /> Écrêter sur le calque du dessous</label>
+            <legend>{tr("Verrous et écrêtage")}</legend>
+            <label><input type="checkbox" checked={active.locks.pixels} onChange={(e) => patch(active, { locks: { ...active.locks, pixels: e.target.checked } })} /> {tr("Pixels")}</label>
+            <label><input type="checkbox" checked={active.locks.position} onChange={(e) => patch(active, { locks: { ...active.locks, position: e.target.checked } })} /> {tr("Position")}</label>
+            <label><input type="checkbox" checked={active.locks.all} onChange={(e) => patch(active, { locks: { ...active.locks, all: e.target.checked } })} /> {tr("Tout")}</label>
+            <label><input type="checkbox" checked={active.clipToBelow} onChange={(e) => patch(active, { clipToBelow: e.target.checked })} /> {tr("Écrêter sur le calque du dessous")}</label>
           </fieldset>
           {active.text && <TextPanel layer={active} text={active.text} />}
           {active.shape && <ShapePanel layer={active} shape={active.shape} />}
@@ -122,13 +123,13 @@ export function LayerPanel() {
           <div className="row wrap">
             {active.hasMask ? (
               <>
-                <button className="btn small secondary" onClick={() => void run(() => api.maskSetEnabled(active.id, !active.maskEnabled))}>{active.maskEnabled ? "Désactiver le masque" : "Activer le masque"}</button>
-                <button className="btn small ghost" onClick={() => void run(() => api.maskRemove(active.id))}>Supprimer le masque</button>
+                <button className="btn small secondary" onClick={() => void run(() => api.maskSetEnabled(active.id, !active.maskEnabled))}>{tr(active.maskEnabled ? "Désactiver le masque" : "Activer le masque")}</button>
+                <button className="btn small ghost" onClick={() => void run(() => api.maskRemove(active.id))}>{tr("Supprimer le masque")}</button>
               </>
             ) : (
               <>
-                <button className="btn small secondary" onClick={() => void run(() => api.maskAdd(active.id, true))}>Masque : tout révéler</button>
-                <button className="btn small secondary" onClick={() => void run(() => api.maskAdd(active.id, false))}>Masque : tout masquer</button>
+                <button className="btn small secondary" onClick={() => void run(() => api.maskAdd(active.id, true))}>{tr("Masque : tout révéler")}</button>
+                <button className="btn small secondary" onClick={() => void run(() => api.maskAdd(active.id, false))}>{tr("Masque : tout masquer")}</button>
               </>
             )}
           </div>

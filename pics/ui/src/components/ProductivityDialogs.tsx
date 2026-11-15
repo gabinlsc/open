@@ -2,7 +2,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ACTIONS, runAction } from "../actions";
 import { api, type BatchReport, type RecoveryDto } from "../api";
-import { t } from "../i18n";
+import { t, t as tr } from "../i18n";
 import { prettyChord } from "../keys";
 import { errorText, useStore } from "../store";
 import { Modal } from "./Modal";
@@ -23,10 +23,10 @@ export function PaletteDialog() {
     for (const [id, a] of Object.entries(ACTIONS)) {
       if (id === "app.palette" || (a.enabled && !a.enabled())) continue;
       const chord = keymap[id]?.[0];
-      out.push({ id, label: t(a.label), hint: chord ? prettyChord(chord) : undefined, run: () => runAction(id) });
+      out.push({ id, label: t(a.label, "action"), hint: chord ? prettyChord(chord) : undefined, run: () => runAction(id) });
     }
     for (const f of snapshot?.filters ?? []) {
-      out.push({ id: `filter:${f.id}`, label: `${f.category} › ${f.label}`, run: () => void import("../actions").then((m) => m.startFilter(f.id)) });
+      out.push({ id: `filter:${f.id}`, label: `${tr(f.category)} › ${tr(f.label)}`, run: () => void import("../actions").then((m) => m.startFilter(f.id)) });
     }
     return out;
   }, [snapshot, keymap]);
@@ -106,14 +106,14 @@ export function RecoveryDialog() {
     setFiles(left);
   };
   return (
-    <Modal title="Documents non enregistrés" onClose={close}>
+    <Modal title={t("Documents non enregistrés")} onClose={close}>
       <div className="form">
-        <p>OpenPics s'est arrêté avant que ces documents soient enregistrés. Voulez-vous les récupérer ?</p>
+        <p>{t("OpenPics s'est arrêté avant que ces documents soient enregistrés. Voulez-vous les récupérer ?")}</p>
         {error && <p role="alert" className="error">{error}</p>}
         <ul>{(files ?? []).map((f) => <li key={f.file}>{f.name}</li>)}</ul>
         <div className="actions">
-          <button className="btn secondary" onClick={() => void discardAll()}>Abandonner</button>
-          <button className="btn" onClick={() => void restoreAll()}>Récupérer</button>
+          <button className="btn secondary" onClick={() => void discardAll()}>{t("Abandonner")}</button>
+          <button className="btn" onClick={() => void restoreAll()}>{t("Récupérer")}</button>
         </div>
       </div>
     </Modal>
@@ -150,25 +150,25 @@ export function BatchDialog() {
     }
   };
   return (
-    <Modal title="Traitement par lot" onClose={close} wide>
+    <Modal title={t("Traitement par lot")} onClose={close} wide>
       <div className="form">
-        <p className="hint">Applique un filtre (avec ses valeurs par défaut) à toutes les images du dossier, sans toucher aux originaux.</p>
+        <p className="hint">{t("Applique un filtre (avec ses valeurs par défaut) à toutes les images du dossier, sans toucher aux originaux.")}</p>
         <div className="row">
-          <button className="btn small secondary" onClick={() => void pick(setInput)}>Dossier source…</button>
+          <button className="btn small secondary" onClick={() => void pick(setInput)}>{t("Dossier source…")}</button>
           <span>{input || "—"}</span>
         </div>
         <div className="row">
-          <button className="btn small secondary" onClick={() => void pick(setOutput)}>Dossier de sortie…</button>
+          <button className="btn small secondary" onClick={() => void pick(setOutput)}>{t("Dossier de sortie…")}</button>
           <span>{output || "—"}</span>
         </div>
         <label>
-          Filtre
+          {t("Filtre")}
           <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-            {filters.map((f) => <option key={f.id} value={f.id}>{f.category} › {f.label}</option>)}
+            {filters.map((f) => <option key={f.id} value={f.id}>{tr(f.category)} › {tr(f.label)}</option>)}
           </select>
         </label>
         <label>
-          Format
+          {t("Format")}
           <select value={ext} onChange={(e) => setExt(e.target.value)}>
             <option value="png">PNG</option>
             <option value="jpg">JPEG</option>
@@ -178,12 +178,12 @@ export function BatchDialog() {
         {error && <p role="alert" className="error">{error}</p>}
         {report && (
           <div role="status">
-            <p>{report.done} fichier(s) traité(s), {report.failed.length} en erreur.</p>
+            <p>{report.done} {t("fichier(s) traité(s), ")}{report.failed.length} {t("en erreur.")}</p>
             {report.failed.length > 0 && <ul>{report.failed.map((f) => <li key={f}>{f}</li>)}</ul>}
           </div>
         )}
         <div className="actions">
-          <button className="btn secondary" onClick={close}>Fermer</button>
+          <button className="btn secondary" onClick={close}>{t("Fermer")}</button>
           <button className="btn" disabled={busy || !input || !output || !def} onClick={() => void run()}>{busy ? "Traitement…" : "Lancer"}</button>
         </div>
       </div>

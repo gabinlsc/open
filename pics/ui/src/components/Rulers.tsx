@@ -1,3 +1,4 @@
+import { t as tr } from "../i18n";
 import { useEffect, useRef } from "react";
 import { api, type AxisDto } from "../api";
 import { physicalRect } from "../canvasHost";
@@ -105,7 +106,7 @@ function Ruler({ orientation, length }: { orientation: "top" | "left"; length: n
       ref={ref}
       className={horizontal ? "ruler ruler-top" : "ruler ruler-left"}
       style={horizontal ? { width: length, height: RULER_SIZE } : { width: RULER_SIZE, height: length }}
-      aria-label={horizontal ? "Règle horizontale : glisser vers le bas pour créer un repère" : "Règle verticale : glisser vers la droite pour créer un repère"}
+      aria-label={tr(horizontal ? "Règle horizontale : glisser vers le bas pour créer un repère" : "Règle verticale : glisser vers la droite pour créer un repère")}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.currentTarget.setPointerCapture(e.pointerId);

@@ -1,3 +1,4 @@
+import { t as tr } from "../i18n";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { api, type AdjustmentDto, type LayerDto } from "../api";
@@ -13,7 +14,7 @@ function Slider({ layerId, p }: { layerId: number; p: AdjustmentDto["params"][nu
   const commit = () => local !== p.value && void run(() => api.adjustmentSetParam(layerId, p.id, local));
   return (
     <label className="slider">
-      <span title={p.label}>{p.label}</span>
+      <span title={tr(p.label)}>{tr(p.label)}</span>
       <input type="range" min={p.min} max={p.max} step={step} value={local} onChange={(e) => setLocal(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
       <output>{Math.round(local * 100) / 100}</output>
     </label>
@@ -26,7 +27,7 @@ function CurveEditor({ layerId, points }: { layerId: number; points: Point[] }) 
   const pts = normalizePoints(points);
   return (
     <div className="curve">
-      <svg viewBox="0 0 120 120" width="100%" role="img" aria-label="Aperçu de la courbe">
+      <svg viewBox="0 0 120 120" width="100%" role="img" aria-label={tr("Aperçu de la courbe")}>
         <rect width="120" height="120" fill="none" stroke="currentColor" opacity="0.25" />
         <path d="M0 120 L120 0" stroke="currentColor" opacity="0.2" fill="none" />
         <path d={svgPath(pts, 120)} stroke="var(--accent)" strokeWidth="2" fill="none" />
@@ -34,12 +35,12 @@ function CurveEditor({ layerId, points }: { layerId: number; points: Point[] }) 
       </svg>
       {pts.map(([x, y], i) => (
         <div className="row" key={i}>
-          <PointField label="Entrée" value={x} disabled={i === 0 || i === pts.length - 1} onCommit={(v) => commit(pts.map((p, k) => (k === i ? [v, p[1]] : p)))} />
-          <PointField label="Sortie" value={y} onCommit={(v) => commit(pts.map((p, k) => (k === i ? [p[0], v] : p)))} />
+          <PointField label={tr("Entrée")} value={x} disabled={i === 0 || i === pts.length - 1} onCommit={(v) => commit(pts.map((p, k) => (k === i ? [v, p[1]] : p)))} />
+          <PointField label={tr("Sortie")} value={y} onCommit={(v) => commit(pts.map((p, k) => (k === i ? [p[0], v] : p)))} />
           <button className="btn small ghost" aria-label={`Supprimer le point ${i + 1}`} disabled={i === 0 || i === pts.length - 1} onClick={() => commit(removePoint(pts, i))}>×</button>
         </div>
       ))}
-      <button className="btn small secondary" onClick={() => commit(addPoint(pts))}>Ajouter un point</button>
+      <button className="btn small secondary" onClick={() => commit(addPoint(pts))}>{tr("Ajouter un point")}</button>
     </div>
   );
 }
@@ -68,12 +69,12 @@ function StopsEditor({ layerId, stops }: { layerId: number; stops: NonNullable<A
       <div className="gradient-preview" style={{ background: `linear-gradient(90deg, ${stops.map((s) => `${s.color} ${Math.round(s.position * 100)}%`).join(", ")})` }} />
       {list.map(([pos, color], i) => (
         <div className="row" key={i}>
-          <label className="num"><span>Couleur</span><input type="color" value={color} onChange={(e) => commit(list.map((s, k): [number, string] => (k === i ? [s[0], e.target.value] : s)))} /></label>
-          <PointField label="Position" value={pos} onCommit={(v) => commit(list.map((s, k): [number, string] => (k === i ? [v, s[1]] : s)))} />
+          <label className="num"><span>{tr("Couleur")}</span><input type="color" value={color} onChange={(e) => commit(list.map((s, k): [number, string] => (k === i ? [s[0], e.target.value] : s)))} /></label>
+          <PointField label={tr("Position")} value={pos} onCommit={(v) => commit(list.map((s, k): [number, string] => (k === i ? [v, s[1]] : s)))} />
           <button className="btn small ghost" aria-label={`Supprimer l'arrêt ${i + 1}`} disabled={list.length <= 2} onClick={() => commit(list.filter((_, k) => k !== i))}>×</button>
         </div>
       ))}
-      <button className="btn small secondary" disabled={list.length >= 16} onClick={() => commit([...list, [0.5, "#808080"]])}>Ajouter un arrêt</button>
+      <button className="btn small secondary" disabled={list.length >= 16} onClick={() => commit([...list, [0.5, "#808080"]])}>{tr("Ajouter un arrêt")}</button>
     </div>
   );
 }
@@ -91,31 +92,31 @@ export function AdjustmentPanel({ layer, adj }: { layer: LayerDto; adj: Adjustme
   };
   return (
     <fieldset className="checks adjustment">
-      <legend>{adj.label}</legend>
+      <legend>{tr(adj.label)}</legend>
       {adj.params.map((p) => <Slider key={`${layer.id}-${p.id}`} layerId={layer.id} p={p} />)}
       {adj.curve && <CurveEditor layerId={layer.id} points={adj.curve as Point[]} />}
       {adj.stops && <StopsEditor layerId={layer.id} stops={adj.stops} />}
       {adj.lutSize !== null && (
         <div className="row wrap">
-          <button className="btn small secondary" onClick={() => void loadLut()}>Charger un fichier .cube…</button>
-          <span className="muted">Table {adj.lutSize}³</span>
+          <button className="btn small secondary" onClick={() => void loadLut()}>{tr("Charger un fichier .cube…")}</button>
+          <span className="muted">{tr("Table ")}{adj.lutSize}³</span>
         </div>
       )}
       {adj.isColorMatch && (
         <>
-          <label className="field">Calque à corriger
+          <label className="field">{tr("Calque à corriger")}
             <select value={source ?? ""} onChange={(e) => setSource(e.target.value === "" ? null : Number(e.target.value))}>
-              <option value="">Choisir…</option>
+              <option value="">{tr("Choisir…")}</option>
               {rasters.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </label>
-          <label className="field">Calque de référence
+          <label className="field">{tr("Calque de référence")}
             <select value={reference ?? ""} onChange={(e) => setReference(e.target.value === "" ? null : Number(e.target.value))}>
-              <option value="">Choisir…</option>
+              <option value="">{tr("Choisir…")}</option>
               {rasters.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </label>
-          <button className="btn small secondary" disabled={source === null || reference === null} onClick={() => source !== null && reference !== null && void run(() => api.adjustmentMatch(layer.id, source, reference))}>Calculer la correspondance</button>
+          <button className="btn small secondary" disabled={source === null || reference === null} onClick={() => source !== null && reference !== null && void run(() => api.adjustmentMatch(layer.id, source, reference))}>{tr("Calculer la correspondance")}</button>
         </>
       )}
     </fieldset>

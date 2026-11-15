@@ -1,3 +1,4 @@
+import { t as tr } from "../i18n";
 import { api } from "../api";
 import { useStore } from "../store";
 
@@ -10,15 +11,15 @@ export function ToolOptions() {
   const set = (patch: Partial<typeof options>) => void run(() => api.setToolOptions({ ...options, ...patch }));
   return (
     <section aria-labelledby="p-tool">
-      <h3 id="p-tool">{tool === "bucket" ? "Pot de peinture" : "Baguette magique"}</h3>
+      <h3 id="p-tool">{tr(tool === "bucket" ? "Pot de peinture" : "Baguette magique")}</h3>
       <label className="percent">
-        <span>Tolérance</span>
+        <span>{tr("Tolérance")}</span>
         <input type="range" min={0} max={255} value={options.tolerance} onChange={(e) => set({ tolerance: Number(e.target.value) })} />
         <output>{options.tolerance}</output>
       </label>
-      <label className="inline"><input type="checkbox" checked={options.contiguous} onChange={(e) => set({ contiguous: e.target.checked })} /> Pixels contigus</label>
-      <label className="inline"><input type="checkbox" checked={options.sampleAllLayers} onChange={(e) => set({ sampleAllLayers: e.target.checked })} /> Tous les calques</label>
-      {tool === "magic_wand" && <p className="muted">Maj : ajouter · Alt : soustraire · Maj+Alt : intersecter</p>}
+      <label className="inline"><input type="checkbox" checked={options.contiguous} onChange={(e) => set({ contiguous: e.target.checked })} /> {tr("Pixels contigus")}</label>
+      <label className="inline"><input type="checkbox" checked={options.sampleAllLayers} onChange={(e) => set({ sampleAllLayers: e.target.checked })} /> {tr("Tous les calques")}</label>
+      {tool === "magic_wand" && <p className="muted">{tr("Maj : ajouter · Alt : soustraire · Maj+Alt : intersecter")}</p>}
     </section>
   );
 }

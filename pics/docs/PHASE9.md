@@ -15,5 +15,5 @@
 - **Remplissage génératif, super‑résolution neuronale, colorisation, débruitage neuronal** : non faits (architectures et pré/post‑traitements propres à chaque modèle, impossibles à valider sans eux). Le redimensionnement Lanczos remplace la super‑résolution classique.
 - **ONNX Runtime n'est pas livré** : `onnxruntime.dll` est à fournir à côté de l'exécutable ou dans le dossier des modèles. `ort` exige Rust ≥ 1.92 quand la fonctionnalité `onnx` est active.
 - **Plans de travail multiples (artboards)** et **édition de nœuds** sur un tracé : non faits — ils demandent un changement du modèle de document / un outil d'édition de courbes complet, que je préfère ne pas improviser.
-- **Traduction** : les boîtes de dialogue et messages restent en français.
+- **Traduction** : complétée ensuite pour toute l'interface (voir `PHASE8.md`) ; les messages d'erreur du cœur et les noms d'historique restent en français.
 - **Le workflow de publication et l'application Tauri n'ont jamais été exécutés sur Windows** depuis cet environnement (vérifiés par `clippy` en compilation croisée seulement).
